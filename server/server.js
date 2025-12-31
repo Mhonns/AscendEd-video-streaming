@@ -259,9 +259,10 @@ io.on('connection', (socket) => {
     
     socket.emit('room-joined', roomJoinedData);
 
-    // Notify other users in the room with user profile
+    // Notify other users in the room with user profile and socket ID
     const userJoinedData = {
       userId: userId,
+      socketId: socket.id,
       user: userProfile,
       participantCount: room.participants.size
     };
@@ -271,6 +272,27 @@ io.on('connection', (socket) => {
     
     socket.to(roomId).emit('user-joined', userJoinedData);
 
+    // Send existing users' info to the new user for WebRTC connections
+    // We need to get socket IDs of existing users
+    const existingUsers = [];
+    socketConnections.forEach((connInfo, sockId) => {
+      if (connInfo.roomId === roomId && connInfo.userId !== userId) {
+        const existingUser = users.get(connInfo.userId) || { userId: connInfo.userId, name: 'Anonymous' };
+        existingUsers.push({
+          userId: connInfo.userId,
+          socketId: sockId,
+          user: existingUser
+        });
+      }
+    });
+    
+    if (existingUsers.length > 0) {
+      socket.emit('existing-users', {
+        users: existingUsers,
+        roomId: roomId
+      });
+    }
+
     console.log(`✅ User ${userId} successfully joined room ${roomId}`);
     console.log('=== END JOIN ===\n');
   });
@@ -278,6 +300,36 @@ io.on('connection', (socket) => {
   socket.on('leave-room', (data) => {
     const { roomId, userId } = data;
     handleUserLeave(socket, roomId, userId);
+  });
+
+  // WebRTC signaling handlers
+  socket.on('webrtc-offer', (data) => {
+    const { offer, targetSocketId, userId } = data;
+    console.log(`WebRTC offer from ${userId} to socket ${targetSocketId}`);
+    socket.to(targetSocketId).emit('webrtc-offer', {
+      offer: offer,
+      fromUserId: userId,
+      fromSocketId: socket.id
+    });
+  });
+
+  socket.on('webrtc-answer', (data) => {
+    const { answer, targetSocketId, userId } = data;
+    console.log(`WebRTC answer from ${userId} to socket ${targetSocketId}`);
+    socket.to(targetSocketId).emit('webrtc-answer', {
+      answer: answer,
+      fromUserId: userId,
+      fromSocketId: socket.id
+    });
+  });
+
+  socket.on('webrtc-ice-candidate', (data) => {
+    const { candidate, targetSocketId, userId } = data;
+    socket.to(targetSocketId).emit('webrtc-ice-candidate', {
+      candidate: candidate,
+      fromUserId: userId,
+      fromSocketId: socket.id
+    });
   });
 
   socket.on('disconnect', () => {
