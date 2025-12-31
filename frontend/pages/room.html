@@ -11,9 +11,21 @@
   <div class="top-bar" id="top-bar">
     <div class="room-info">
       <div class="room-name">Meeting Room</div>
-      <div class="room-id">Room ID: ABC123XYZ</div>
+      <div class="room-id-container">
+        <span class="room-id">Room ID: ABC123XYZ</span>
+        <button class="copy-btn" id="copy-room-id-btn" title="Copy Room ID">
+          <img src="../assets/icons/copy.svg" alt="Copy" class="copy-icon">
+        </button>
+      </div>
+    </div>
+    <div class="user-count">
+      <img src="../assets/icons/people.svg" alt="People" class="people-icon">
+      <span id="user-count-number">0</span>
     </div>
     <div class="top-controls">
+      <button class="icon-btn" id="recording-btn" title="Stop Recording">
+        <img src="../assets/icons/recording-off.svg" alt="Recording">
+      </button>
       <button class="icon-btn" id="people-btn" title="Participants">
         <img src="../assets/icons/people.svg" alt="People">
       </button>
@@ -28,20 +40,27 @@
 
   <!-- Video Container -->
   <div class="video-container">
-    <div class="video-grid">
-      <div class="video-placeholder">
-        <div class="placeholder-text">Waiting for participants..</div>
+    <div class="video-grid" id="video-grid">
+      <div class="video-placeholder" id="video-placeholder">
+        <div class="placeholder-text">No one is sharing their screen..</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Users Sidebar -->
+  <div class="users-sidebar" id="users-sidebar">
+    <div class="users-list" id="users-list">
+      <!-- Users will be dynamically added here -->
     </div>
   </div>
 
   <!-- Bottom Controls -->
   <div class="bottom-controls" id="bottom-controls">
     <button class="control-btn off" id="mic-btn" title="Microphone">
-      <img src="../assets/icons/mic.svg" alt="Mic">
+      <img src="../assets/icons/mic-off.svg" alt="Mic">
     </button>
     <button class="control-btn off" id="camera-btn" title="Camera">
-      <img src="../assets/icons/camera.svg" alt="Camera">
+      <img src="../assets/icons/camera-off.svg" alt="Camera">
     </button>
     <button class="control-btn" id="share-btn" title="Share Screen">
       <img src="../assets/icons/screen.svg" alt="Share">
@@ -51,6 +70,7 @@
     </button>
   </div>
 
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script src="../js/room.js"></script>
 </body>
 </html>

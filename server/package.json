@@ -1,0 +1,22 @@
+{
+  "name": "ascended-video-streaming-server",
+  "version": "1.0.0",
+  "description": "Backend server for AscendEd video streaming application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["video", "streaming", "webrtc"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
+

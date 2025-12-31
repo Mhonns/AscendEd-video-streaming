@@ -51,9 +51,73 @@ body.show-cursor {
   color: white;
 }
 
+.room-id-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .room-id {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
+}
+
+.copy-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.copy-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.copy-icon {
+  width: 14px;
+  height: 14px;
+  filter: invert(1);
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.copy-btn:hover .copy-icon {
+  opacity: 0.9;
+}
+
+.user-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 20px;
+}
+
+.people-icon {
+  width: 16px;
+  height: 16px;
+  filter: invert(1);
+  opacity: 0.8;
+}
+
+.user-count span {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
 }
 
 .top-controls {
@@ -80,10 +144,35 @@ body.show-cursor {
   border-color: rgba(255, 255, 255, 0.5);
 }
 
+.icon-btn.active {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
 .icon-btn img {
   width: 20px;
   height: 20px;
   filter: invert(1);
+}
+
+#recording-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+#recording-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+#recording-btn.recording {
+  background: rgba(0, 122, 255, 0.3);
+  border-color: rgba(0, 122, 255, 0.6);
+}
+
+#recording-btn.recording:hover {
+  background: rgba(0, 122, 255, 0.4);
+  border-color: rgba(0, 122, 255, 0.8);
 }
 
 /* Video Container */
@@ -96,29 +185,80 @@ body.show-cursor {
   display: flex;
   justify-content: center;
   align-items: center;
+  padding-right: 0;
+  transition: padding-right 0.3s ease;
 }
 
 .video-grid {
   width: 100%;
   height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  padding: 100px 20px 120px;
+  align-content: start;
+  overflow-y: auto;
 }
 
 .video-placeholder {
-  background: #000;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
+  background: #000;
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 1;
+}
+
+.video-placeholder.hidden {
+  display: none;
 }
 
 .placeholder-text {
   font-size: 20px;
   color: white;
   font-weight: 400;
+}
+
+.user-card {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  min-height: 200px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.user-card:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.user-card-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.user-card-name {
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+  word-break: break-word;
 }
 
 /* Bottom Controls */
@@ -187,10 +327,112 @@ body.show-cursor {
   background: rgba(255, 59, 48, 0.4);
 }
 
-/* Responsive */
+/* Users Sidebar */
+.users-sidebar {
+  position: fixed;
+  top: 85px;
+  right: 0;
+  width: 280px;
+  bottom: 95px;
+  background: transparent;
+  z-index: 50;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease, width 0.3s ease;
+}
+
+.users-sidebar.hidden {
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
+}
+
+.users-list {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.users-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.users-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.users-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.users-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.user-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.user-name {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Responsive Styles */
+@media (max-width: 1024px) {
+  .users-sidebar {
+    width: 240px;
+  }
+
+  .video-grid {
+    padding-right: 260px;
+  }
+}
+
 @media (max-width: 768px) {
   .top-bar {
-    padding: 15px 20px;
+    padding: 12px 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .room-info {
+    flex: 1;
+    min-width: 0;
   }
 
   .room-name {
@@ -201,9 +443,42 @@ body.show-cursor {
     font-size: 11px;
   }
 
+  .room-id-container {
+    gap: 6px;
+  }
+
+  .copy-btn {
+    width: 20px;
+    height: 20px;
+  }
+
+  .copy-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .user-count {
+    margin-left: 10px;
+    gap: 4px;
+  }
+
+  .people-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .user-count span {
+    font-size: 12px;
+  }
+
+  .top-controls {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
   .icon-btn {
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
   }
 
   .icon-btn img {
@@ -211,22 +486,185 @@ body.show-cursor {
     height: 18px;
   }
 
-  .bottom-controls {
-    padding: 20px;
+  .users-sidebar {
+    width: 200px;
+    top: 70px;
+    bottom: 85px;
+  }
+
+  .video-grid {
+    padding: 80px 15px 100px;
     gap: 15px;
   }
 
+  .bottom-controls {
+    padding: 15px 20px;
+    gap: 12px;
+  }
+
   .control-btn {
-    width: 50px;
-    height: 50px;
+    width: 48px;
+    height: 48px;
   }
 
   .control-btn img {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
+  }
+
+  .user-item {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .user-avatar {
+    width: 35px;
+    height: 35px;
+  }
+
+  .user-name {
+    font-size: 13px;
   }
 
   .placeholder-text {
     font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .top-bar {
+    padding: 10px 12px;
+  }
+
+  .room-name {
+    font-size: 13px;
+  }
+
+  .room-id {
+    font-size: 10px;
+  }
+
+  .room-id-container {
+    gap: 4px;
+  }
+
+  .copy-btn {
+    width: 18px;
+    height: 18px;
+  }
+
+  .copy-icon {
+    width: 11px;
+    height: 11px;
+  }
+
+  .user-count {
+    margin-left: 8px;
+  }
+
+  .people-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .user-count span {
+    font-size: 11px;
+  }
+
+  .top-controls {
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 35px;
+    height: 35px;
+  }
+
+  .icon-btn img {
+    width: 16px;
+    height: 16px;
+  }
+
+  .users-sidebar {
+    width: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .video-grid {
+    padding: 70px 10px 90px;
+    gap: 12px;
+  }
+
+  .bottom-controls {
+    padding: 12px 15px;
+    gap: 10px;
+  }
+
+  .control-btn {
+    width: 45px;
+    height: 45px;
+  }
+
+  .control-btn img {
+    width: 18px;
+    height: 18px;
+  }
+
+  .user-item {
+    padding: 6px;
+    gap: 8px;
+  }
+
+  .user-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .user-name {
+    font-size: 12px;
+  }
+
+  .placeholder-text {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .top-bar {
+    padding: 8px 10px;
+  }
+
+  .room-name {
+    font-size: 12px;
+  }
+
+  .room-id {
+    font-size: 9px;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .icon-btn img {
+    width: 14px;
+    height: 14px;
+  }
+
+  .bottom-controls {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .control-btn {
+    width: 42px;
+    height: 42px;
+  }
+
+  .control-btn img {
+    width: 16px;
+    height: 16px;
   }
 }
