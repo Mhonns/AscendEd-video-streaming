@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Conference</title>
+  <link rel="stylesheet" href="css/landing.css">
+</head>
+<body>
+  <div class="container">
+    <div id="main-view">
+      <h1>Video Conference</h1>
+      <div class="button-group">
+        <button onclick="showStartMeeting()">Start a Meeting</button>
+        <button onclick="showJoinMeeting()">Join the Meeting</button>
+        <button onclick="viewRecordings()">View All Recording</button>
+      </div>
+    </div>
+
+    <div id="start-view" class="input-group">
+      <h1>Start a Meeting</h1>
+      <input type="text" id="meeting-name" placeholder="Meeting Name (optional)" />
+      <button onclick="startMeeting()">Create Meeting</button>
+      <a class="back-link" onclick="showMain()">← Back</a>
+    </div>
+
+    <div id="join-view" class="input-group">
+      <h1>Join the Meeting</h1>
+      <input type="text" id="room-code" placeholder="Enter Room Code" />
+      <button onclick="joinMeeting()">Join Now</button>
+      <a class="back-link" onclick="showMain()">← Back</a>
+    </div>
+  </div>
+
+  <script src="js/landing.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Conference Room</title>
+  <link rel="stylesheet" href="../css/room.css">
+</head>
+<body>
+  <!-- Top Bar -->
+  <div class="top-bar" id="top-bar">
+    <div class="room-info">
+      <div class="room-name">Meeting Room</div>
+      <div class="room-id">Room ID: ABC123XYZ</div>
+    </div>
+    <div class="top-controls">
+      <button class="icon-btn" id="people-btn" title="Participants">
+        <img src="../assets/icons/people.svg" alt="People">
+      </button>
+      <button class="icon-btn" id="chat-btn" title="Chat">
+        <img src="../assets/icons/chat.svg" alt="Chat">
+      </button>
+      <button class="icon-btn" id="toggle-ui-btn" title="Toggle Auto-Hide">
+        <img src="../assets/icons/pin.svg" alt="Pin">
+      </button>
+    </div>
+  </div>
+
+  <!-- Video Container -->
+  <div class="video-container">
+    <div class="video-grid">
+      <div class="video-placeholder">
+        <div class="placeholder-text">Waiting for participants..</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Controls -->
+  <div class="bottom-controls" id="bottom-controls">
+    <button class="control-btn off" id="mic-btn" title="Microphone">
+      <img src="../assets/icons/mic.svg" alt="Mic">
+    </button>
+    <button class="control-btn off" id="camera-btn" title="Camera">
+      <img src="../assets/icons/camera.svg" alt="Camera">
+    </button>
+    <button class="control-btn" id="share-btn" title="Share Screen">
+      <img src="../assets/icons/screen.svg" alt="Share">
+    </button>
+    <button class="control-btn leave-btn" id="leave-btn" title="Leave">
+      <img src="../assets/icons/leave.svg" alt="Leave">
+    </button>
+  </div>
+
+  <script src="../js/room.js"></script>
+</body>
+</html>
