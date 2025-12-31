@@ -70,7 +70,24 @@
     </button>
   </div>
 
+  <!-- Microphone Permission Modal -->
+  <div class="permission-modal" id="mic-permission-modal">
+    <div class="permission-modal-content">
+      <div class="permission-modal-icon">
+        <img src="../assets/icons/mic.svg" alt="Microphone" style="width: 64px; height: 64px; filter: invert(1);">
+      </div>
+      <h2>Microphone Permission Required</h2>
+      <p>This site needs access to your microphone to enable voice communication in the meeting.</p>
+      <div class="permission-modal-buttons">
+        <button class="permission-btn allow-btn" id="allow-mic-btn">Allow Microphone</button>
+        <button class="permission-btn cancel-btn" id="deny-mic-btn">Not Now</button>
+      </div>
+      <p class="permission-note">You can enable your microphone later using the button in the bottom controls.</p>
+    </div>
+  </div>
+
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="../js/webrtc.js"></script>
   <script src="../js/room.js"></script>
 </body>
 </html>

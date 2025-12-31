@@ -93,6 +93,9 @@ async function initRoom() {
   // Connect to Socket.io server
   socket = io(SERVER_URL);
 
+  // Initialize WebRTC module
+  WebRTC.initialize(socket, userId);
+
   socket.on('connect', () => {
     console.log('Connected to server');
     // Join the room
@@ -112,6 +115,9 @@ async function initRoom() {
       displayUsers(loggedInUsers);
       updateUserCount(loggedInUsers.length);
     }
+    
+    // Show microphone permission modal after room is joined
+    showMicPermissionModal();
   });
 
   socket.on('room-error', (data) => {
@@ -123,15 +129,19 @@ async function initRoom() {
 
   socket.on('user-joined', (data) => {
     console.log('User joined:', data);
+    // Update UI
     if (data.user && data.user.name && data.user.name !== 'Anonymous') {
       addUserToList(data.user);
       updateUserCount(usersList.length);
     }
+    // WebRTC connection is handled by the WebRTC module
   });
 
   socket.on('user-left', (data) => {
     console.log('User left:', data);
     if (data.userId) {
+      // Close WebRTC connection with this user
+      WebRTC.closePeerConnection(data.userId);
       removeUserFromList(data.userId);
       updateUserCount(usersList.length);
     }
@@ -139,7 +149,11 @@ async function initRoom() {
 
   socket.on('disconnect', () => {
     console.log('Disconnected from server');
+    // Clean up all WebRTC connections
+    WebRTC.cleanup();
   });
+  
+  // WebRTC signaling events are handled by the WebRTC module
 }
 
 // Auto-hide controls
@@ -176,21 +190,127 @@ document.addEventListener('mousedown', showControls);
 // Show controls initially
 showControls();
 
+// Microphone Permission Modal
+function showMicPermissionModal() {
+  // Check if getUserMedia is supported first
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.log('getUserMedia not supported, skipping permission modal');
+    
+    // Show error message instead
+    const isSecureContext = window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    let errorMessage = 'Microphone access is not supported. ';
+    if (!isSecureContext && location.protocol === 'http:') {
+      errorMessage += 'Please access this site over HTTPS or use localhost (http://localhost:3000).';
+    } else {
+      errorMessage += 'Please use a modern browser that supports the MediaDevices API.';
+    }
+    alert(errorMessage);
+    return;
+  }
+  
+  // Check if permission was already granted or denied
+  const permissionState = localStorage.getItem('micPermissionState');
+  
+  // Don't show modal if permission was already denied
+  if (permissionState === 'denied') {
+    console.log('Microphone permission was previously denied, skipping modal');
+    return;
+  }
+  
+  // Don't show modal if permission was already granted
+  if (permissionState === 'granted' && WebRTC.getStream()) {
+    console.log('Microphone permission already granted');
+    return;
+  }
+  
+  const modal = document.getElementById('mic-permission-modal');
+  if (modal) {
+    modal.classList.add('show');
+    
+    // Setup button handlers
+    const allowBtn = document.getElementById('allow-mic-btn');
+    const denyBtn = document.getElementById('deny-mic-btn');
+    
+    if (allowBtn) {
+      allowBtn.onclick = async () => {
+        try {
+          await WebRTC.requestMicrophonePermission();
+          // Enable mic button UI after permission granted
+          const micBtn = document.getElementById('mic-btn');
+          const micIcon = micBtn.querySelector('img');
+          if (micBtn && micIcon) {
+            micBtn.classList.remove('off');
+            micIcon.src = '../assets/icons/mic.svg';
+            isMicOn = true;
+          }
+          hideMicPermissionModal();
+        } catch (error) {
+          console.error('Error requesting microphone permission:', error);
+          // Modal will stay open, user can try again or click "Not Now"
+        }
+      };
+    }
+    
+    if (denyBtn) {
+      denyBtn.onclick = () => {
+        localStorage.setItem('micPermissionState', 'denied');
+        hideMicPermissionModal();
+      };
+    }
+  }
+}
+
+function hideMicPermissionModal() {
+  const modal = document.getElementById('mic-permission-modal');
+  if (modal) {
+    modal.classList.remove('show');
+  }
+}
+
 // Toggle microphone
 let isMicOn = false;
 const micBtn = document.getElementById('mic-btn');
 const micIcon = micBtn.querySelector('img');
-micBtn.addEventListener('click', function() {
-  isMicOn = !isMicOn;
-  if (isMicOn) {
-    this.classList.remove('off');
-    micIcon.src = '../assets/icons/mic.svg';
-  } else {
+micBtn.addEventListener('click', async function() {
+  try {
+    if (!isMicOn) {
+      // Turn mic ON
+      const stream = WebRTC.getStream();
+      if (!stream) {
+        // Request permission if not already granted
+        try {
+          await WebRTC.getLocalAudioStream();
+        } catch (error) {
+          // Permission denied or error - show modal again
+          showMicPermissionModal();
+          return;
+        }
+      }
+      
+      // Enable microphone through WebRTC module
+      if (WebRTC.enableMicrophone()) {
+        this.classList.remove('off');
+        micIcon.src = '../assets/icons/mic.svg';
+        isMicOn = true;
+        console.log('Microphone: ON');
+        hideMicPermissionModal(); // Hide modal if it's still showing
+      }
+    } else {
+      // Turn mic OFF
+      WebRTC.disableMicrophone();
+
+      this.classList.add('off');
+      micIcon.src = '../assets/icons/mic-off.svg';
+      isMicOn = false;
+      console.log('Microphone: OFF');
+    }
+  } catch (error) {
+    console.error('Error toggling microphone:', error);
+    // Keep the UI state consistent
     this.classList.add('off');
     micIcon.src = '../assets/icons/mic-off.svg';
+    isMicOn = false;
   }
-  console.log('Microphone:', isMicOn ? 'ON' : 'OFF');
-  // TODO: Implement actual mic toggle
 });
 
 // Toggle camera
@@ -291,6 +411,9 @@ toggleUiBtn.classList.add('active');
 // Leave meeting
 document.getElementById('leave-btn').addEventListener('click', function() {
   console.log('Leaving meeting...');
+  
+  // Clean up WebRTC connections
+  WebRTC.cleanup();
   
   // Notify server that user is leaving
   if (socket && currentRoomId && userId) {
@@ -445,6 +568,9 @@ function fallbackCopy(roomId, copyIcon) {
 
 // Disconnect socket when user leaves the page
 function disconnectOnLeave() {
+  // Clean up WebRTC connections
+  WebRTC.cleanup();
+  
   if (socket && socket.connected) {
     // Try to notify server that user is leaving (non-blocking)
     if (currentRoomId && userId) {
