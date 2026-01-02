@@ -6,17 +6,16 @@
 cd "$(dirname "$0")"
 
 echo "Starting local server..."
-echo "Server will be available at: http://0.0.0.0:8000"
+echo "Server will be available at: https://streaming.nathadon.com"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
 # Check if Python 3 is available
 if command -v python3 &> /dev/null; then
-    python3 -m http.server 8000
+    python3 -m http.server 443
 elif command -v python &> /dev/null; then
-    python -m http.server 8000
+    python -m http.server 443
 else
     echo "Error: Python is not installed. Please install Python 3 to use this script."
     exit 1
 fi
-

@@ -1,11 +1,46 @@
 const express = require('express');
-const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 
 const app = express();
-const server = http.createServer(app);
+
+// SSL Certificate paths
+const SSL_CERT_PATH = '/etc/letsencrypt/live/streaming.nathadon.com/fullchain.pem';
+const SSL_KEY_PATH = '/etc/letsencrypt/live/streaming.nathadon.com/privkey.pem';
+
+// Check if certificate files exist
+let sslOptions = null;
+try {
+  if (fs.existsSync(SSL_CERT_PATH) && fs.existsSync(SSL_KEY_PATH)) {
+    sslOptions = {
+      cert: fs.readFileSync(SSL_CERT_PATH),
+      key: fs.readFileSync(SSL_KEY_PATH)
+    };
+    console.log('SSL certificates loaded successfully');
+  } else {
+    console.warn('SSL certificates not found. Server will run without HTTPS.');
+    console.warn(`Looking for cert: ${SSL_CERT_PATH}`);
+    console.warn(`Looking for key: ${SSL_KEY_PATH}`);
+  }
+} catch (error) {
+  console.error('Error loading SSL certificates:', error.message);
+  console.warn('Server will run without HTTPS.');
+}
+
+// Create HTTPS server if certificates are available, otherwise fallback to HTTP
+let server;
+if (sslOptions) {
+  server = https.createServer(sslOptions, app);
+} else {
+  // Fallback to HTTP if certificates not available
+  const http = require('http');
+  server = http.createServer(app);
+  console.warn('Running in HTTP mode. For production, ensure SSL certificates are configured.');
+}
+
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -145,6 +180,8 @@ app.post('/api/users/profile', (req, res) => {
     return res.status(400).json({ error: 'User ID and name are required' });
   }
 
+  console.log(`Saving user profile for ${userId}: ${name}`);
+
   // Store or update user profile (ignoring profileImage for now)
   users.set(userId, {
     userId: userId,
@@ -182,11 +219,10 @@ app.get('/api/rooms/:roomId/users', (req, res) => {
     return res.status(404).json({ error: 'Room not found or inactive' });
   }
   
-  // Get user profiles for all participants (ignoring profileImage)
-  const roomUsers = Array.from(room.participants).map(userId => {
-    const user = users.get(userId);
-    return user || { userId, name: 'Anonymous' };
-  });
+  // Get user profiles for all participants (only include users with saved profiles)
+  const roomUsers = Array.from(room.participants)
+    .map(userId => users.get(userId))
+    .filter(user => user && user.name && user.name !== 'Anonymous');
   
   res.json({
     success: true,
@@ -195,21 +231,15 @@ app.get('/api/rooms/:roomId/users', (req, res) => {
 });
 
 // Socket.io connection handling
-// Store socket connection info: socketId -> { roomId, userId }
 const socketConnections = new Map();
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-
     socket.on('join-room', (data) => {
     const { roomId, userId } = data;
-    console.log('\n=== USER JOINING ROOM ===');
-    console.log('Join request:', { roomId, userId });
     
     const room = getRoom(roomId);
     
     if (!room || !room.isActive) {
-      console.log('❌ Room not found or inactive');
       socket.emit('room-error', { message: 'Room not found or inactive' });
       return;
     }
@@ -217,35 +247,20 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     joinRoom(roomId, userId);
     
-    // Store socket connection info for cleanup on disconnect
     socketConnections.set(socket.id, { roomId, userId });
     
-    // Get user profile if exists (ignoring profileImage)
+    // Get user profile
     const userProfile = users.get(userId) || { userId, name: 'Anonymous' };
+    const userName = userProfile.name || 'Anonymous';
     
-    // Get all users in the room (including the current user)
-    const roomUsers = Array.from(room.participants).map(uid => {
-      const user = users.get(uid);
-      return user || { userId: uid, name: 'Anonymous' };
-    });
+    // Welcome log message
+    console.log(`\n Welcome ${userName} (${userId}) to room "${room.name}" (${roomId})!`);
+    console.log(`   Room has ${room.participants.size} participant(s)`);
     
-    // Debug: Print room data
-    console.log('📊 ROOM DATA:');
-    console.log('  Room ID:', room.id);
-    console.log('  Room Name:', room.name);
-    console.log('  Host ID:', room.hostId);
-    console.log('  Is Active:', room.isActive);
-    console.log('  Created At:', room.createdAt);
-    console.log('  Total Participants:', room.participants.size);
-    console.log('  Participant IDs:', Array.from(room.participants));
-    console.log('\n👥 USER PROFILES IN ROOM:');
-    roomUsers.forEach((user, index) => {
-      console.log(`  [${index + 1}] User ID: ${user.userId}`);
-      console.log(`      Name: ${user.name}`);
-    });
-    console.log('\n🔍 JOINING USER PROFILE:');
-    console.log('  User ID:', userProfile.userId);
-    console.log('  Name:', userProfile.name);
+    // Get all users in the room (only include users with saved profiles)
+    const roomUsers = Array.from(room.participants)
+      .map(uid => users.get(uid))
+      .filter(user => user && user.name && user.name !== 'Anonymous'); // Only include users with saved profiles
     
     const roomJoinedData = {
       roomId: room.id,
@@ -254,12 +269,10 @@ io.on('connection', (socket) => {
       users: roomUsers
     };
     
-    console.log('\n📤 SENDING TO CLIENT (room-joined):');
-    console.log(JSON.stringify(roomJoinedData, null, 2));
-    
     socket.emit('room-joined', roomJoinedData);
 
-    // Notify other users in the room with user profile and socket ID
+    // Only notify other users if the joining user has a saved profile
+    if (userProfile && userProfile.name && userProfile.name !== 'Anonymous') {
     const userJoinedData = {
       userId: userId,
       socketId: socket.id,
@@ -267,22 +280,21 @@ io.on('connection', (socket) => {
       participantCount: room.participants.size
     };
     
-    console.log('\n📤 NOTIFYING OTHER USERS (user-joined):');
-    console.log(JSON.stringify(userJoinedData, null, 2));
-    
     socket.to(roomId).emit('user-joined', userJoinedData);
+    }
 
-    // Send existing users' info to the new user for WebRTC connections
-    // We need to get socket IDs of existing users
     const existingUsers = [];
     socketConnections.forEach((connInfo, sockId) => {
       if (connInfo.roomId === roomId && connInfo.userId !== userId) {
-        const existingUser = users.get(connInfo.userId) || { userId: connInfo.userId, name: 'Anonymous' };
+        const existingUser = users.get(connInfo.userId);
+        // Only include users with saved profiles
+        if (existingUser && existingUser.name && existingUser.name !== 'Anonymous') {
         existingUsers.push({
           userId: connInfo.userId,
           socketId: sockId,
           user: existingUser
         });
+        }
       }
     });
     
@@ -292,9 +304,6 @@ io.on('connection', (socket) => {
         roomId: roomId
       });
     }
-
-    console.log(`✅ User ${userId} successfully joined room ${roomId}`);
-    console.log('=== END JOIN ===\n');
   });
 
   socket.on('leave-room', (data) => {
@@ -302,84 +311,81 @@ io.on('connection', (socket) => {
     handleUserLeave(socket, roomId, userId);
   });
 
-  // WebRTC signaling handlers
-  socket.on('webrtc-offer', (data) => {
-    const { offer, targetSocketId, userId } = data;
-    console.log(`WebRTC offer from ${userId} to socket ${targetSocketId}`);
-    socket.to(targetSocketId).emit('webrtc-offer', {
-      offer: offer,
-      fromUserId: userId,
-      fromSocketId: socket.id
-    });
-  });
-
-  socket.on('webrtc-answer', (data) => {
-    const { answer, targetSocketId, userId } = data;
-    console.log(`WebRTC answer from ${userId} to socket ${targetSocketId}`);
-    socket.to(targetSocketId).emit('webrtc-answer', {
-      answer: answer,
-      fromUserId: userId,
-      fromSocketId: socket.id
-    });
-  });
-
-  socket.on('webrtc-ice-candidate', (data) => {
-    const { candidate, targetSocketId, userId } = data;
-    socket.to(targetSocketId).emit('webrtc-ice-candidate', {
-      candidate: candidate,
-      fromUserId: userId,
-      fromSocketId: socket.id
-    });
-  });
-
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    
-    // Get connection info for this socket
     const connectionInfo = socketConnections.get(socket.id);
     
     if (connectionInfo) {
       const { roomId, userId } = connectionInfo;
-      console.log(`Handling disconnect for user ${userId} in room ${roomId}`);
-      
-      // Handle user leave (same logic as explicit leave)
       handleUserLeave(socket, roomId, userId);
-      
-      // Remove from socket connections map
       socketConnections.delete(socket.id);
-    } else {
-      console.log('No room info found for disconnected socket:', socket.id);
     }
   });
 });
 
-// Helper function to handle user leaving (used by both leave-room and disconnect)
 function handleUserLeave(socket, roomId, userId) {
   const room = getRoom(roomId);
   
   if (room) {
+    const userProfile = users.get(userId) || { userId, name: 'Anonymous' };
+    const userName = userProfile.name || 'Anonymous';
+    
     leaveRoom(roomId, userId);
     socket.leave(roomId);
     
-    // Get user profile for notification
-    const userProfile = users.get(userId) || { userId, name: 'Anonymous' };
+    console.log(`👋 ${userName} (${userId}) left room "${room.name}" (${roomId})`);
+    console.log(`   Room now has ${room.participants.size} participant(s)`);
     
-    // Notify other users in the room
     socket.to(roomId).emit('user-left', {
       userId: userId,
       user: userProfile,
       participantCount: room.participants.size
     });
-    
-    console.log(`User ${userId} left room ${roomId}`);
-    console.log(`Remaining participants in room ${roomId}: ${room.participants.size}`);
-  } else {
-    console.log(`Room ${roomId} not found when user ${userId} tried to leave`);
   }
 }
 
-const PORT = process.env.PORT || 3000;
+// Sync room with signaling server
+function syncRoomWithSignalingServer(roomId, meetingName, hostId) {
+  const signalingHost = process.env.SIGNALING_SERVER_HOST || 'streaming.nathadon.com';
+  const signalingPort = process.env.SIGNALING_SERVER_PORT || 10443;
+  const useHttps = process.env.SIGNALING_SERVER_HTTPS !== 'false';
+  
+  const data = JSON.stringify({
+    roomId: roomId,
+    meetingName: meetingName,
+    hostId: hostId
+  });
+  
+  const options = {
+    hostname: signalingHost,
+    port: signalingPort,
+    path: '/api/rooms/sync',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': data.length
+    },
+    rejectUnauthorized: false // Allow self-signed certs in dev
+  };
+  
+  const client = useHttps ? https : require('http');
+  const req = client.request(options, (res) => {
+    // Response handled (ignore errors)
+  });
+  
+  req.on('error', (error) => {
+    // Silently fail - signaling server sync is optional
+  });
+  
+  req.write(data);
+  req.end();
+}
+
+const PORT = process.env.PORT || 8443;
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  const protocol = sslOptions ? 'https' : 'http';
+  console.log(`Server running on ${protocol}://localhost:${PORT}`);
+  if (sslOptions) {
+    console.log(`HTTPS server accessible at: https://streaming.nathadon.com:${PORT}`);
+  }
 });
 

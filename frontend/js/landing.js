@@ -14,50 +14,19 @@ function showMain() {
   document.getElementById('join-view').classList.remove('show');
 }
 
-// Determine server URL - try 192.168.1.54 first, fallback to localhost
-let SERVER_URL = 'http://localhost:3000';
-let API_URL = 'http://localhost:3000/api';
-
-// Test connection to determine which server to use
-async function determineServerURL() {
-  const primaryURL = 'http://192.168.1.54:3000';
-  const fallbackURL = 'http://localhost:3000';
-  
-  // Create a timeout promise
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Timeout')), 2000);
-  });
-  
-  try {
-    // Try to connect to primary server with timeout
-    const response = await Promise.race([
-      fetch(`${primaryURL}/api/rooms/test`, { method: 'GET' }),
-      timeoutPromise
-    ]);
-    
-    // If we get any response (even 404), server exists
-    SERVER_URL = primaryURL;
-    API_URL = `${primaryURL}/api`;
-    console.log('Using server:', SERVER_URL);
-    return SERVER_URL;
-  } catch (error) {
-    // Primary server not available, use fallback
-    console.log('Primary server not available, using fallback:', fallbackURL);
-    SERVER_URL = fallbackURL;
-    API_URL = `${fallbackURL}/api`;
-    return SERVER_URL;
-  }
-}
-
+// Use central config for server URL
 // Initialize server URL on page load
 determineServerURL();
 
 async function startMeeting() {
+  // Ensure server URL is determined
+  await determineServerURL();
+  
   const meetingName = document.getElementById('meeting-name').value || 'Quick Meeting';
   const roomId = generateRoomId();
   
   try {
-    const response = await fetch(`${API_URL}/rooms/create`, {
+    const response = await fetch(`${getAPIURL()}/rooms/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,7 +63,7 @@ async function joinMeeting() {
   }
   
   try {
-    const response = await fetch(`${API_URL}/rooms/join`, {
+    const response = await fetch(`${getAPIURL()}/rooms/join`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -177,15 +146,14 @@ async function saveUserProfile() {
   
   // Send to server
   try {
-    const response = await fetch(`${API_URL}/users/profile`, {
+    const response = await fetch(`${getAPIURL()}/users/profile`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         userId: userId,
-        name: userName,
-        profileImage: profileImage && profileImage !== 'assets/icons/people.svg' ? profileImage : null
+        name: userName
       })
     });
     

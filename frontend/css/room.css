@@ -471,6 +471,8 @@ body.show-cursor {
   flex-direction: column;
   gap: 10px;
   pointer-events: auto;
+  background: transparent;
+  border: none;
 }
 
 .users-list::-webkit-scrollbar {
@@ -495,16 +497,10 @@ body.show-cursor {
   align-items: center;
   gap: 12px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.2s ease;
+  background: transparent;
+  border: none;
 }
 
-.user-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-}
 
 .user-avatar {
   width: 40px;
@@ -625,11 +621,6 @@ body.show-cursor {
     height: 20px;
   }
 
-  .user-item {
-    padding: 8px;
-    gap: 10px;
-  }
-
   .user-avatar {
     width: 35px;
     height: 35px;
@@ -722,11 +713,6 @@ body.show-cursor {
   .control-btn img {
     width: 18px;
     height: 18px;
-  }
-
-  .user-item {
-    padding: 6px;
-    gap: 8px;
   }
 
   .user-avatar {

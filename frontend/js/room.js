@@ -2,36 +2,8 @@
 let socket = null;
 let userId = null;
 let currentRoomId = null;
-let SERVER_URL = 'http://localhost:3000';
 
-// Determine server URL - try 192.168.1.54 first, fallback to localhost
-async function determineServerURL() {
-  const primaryURL = 'http://192.168.1.54:3000';
-  const fallbackURL = 'http://localhost:3000';
-  
-  // Create a timeout promise
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Timeout')), 2000);
-  });
-  
-  try {
-    // Try to connect to primary server with timeout
-    const response = await Promise.race([
-      fetch(`${primaryURL}/api/rooms/test`, { method: 'GET' }),
-      timeoutPromise
-    ]);
-    
-    // If we get any response (even 404), server exists
-    SERVER_URL = primaryURL;
-    console.log('Using server:', SERVER_URL);
-    return SERVER_URL;
-  } catch (error) {
-    // Primary server not available, use fallback
-    console.log('Primary server not available, using fallback:', fallbackURL);
-    SERVER_URL = fallbackURL;
-    return SERVER_URL;
-  }
-}
+// Use central config for server URL
 
 // Get room ID from URL parameters
 function getRoomId() {
@@ -65,7 +37,7 @@ async function initRoom() {
 
   // Validate room exists before connecting
   try {
-    const response = await fetch(`${SERVER_URL}/api/rooms/${roomId}`);
+    const response = await fetch(`${getAPIURL()}/rooms/${roomId}`);
     const data = await response.json();
     
     if (!response.ok || !data.success) {
@@ -91,10 +63,7 @@ async function initRoom() {
   const profileImage = localStorage.getItem('profileImage') || null;
 
   // Connect to Socket.io server
-  socket = io(SERVER_URL);
-
-  // Initialize WebRTC module
-  WebRTC.initialize(socket, userId);
+  socket = io(getServerURL());
 
   socket.on('connect', () => {
     console.log('Connected to server');
@@ -109,15 +78,20 @@ async function initRoom() {
     console.log('Successfully joined room:', data);
     document.querySelector('.room-name').textContent = data.roomName;
     
-    // Display users in sidebar (filter out anonymous users) and update count
-    if (data.users && Array.isArray(data.users)) {
-      const loggedInUsers = data.users.filter(user => user.name && user.name !== 'Anonymous');
-      displayUsers(loggedInUsers);
-      updateUserCount(loggedInUsers.length);
+    // Ensure sidebar is visible
+    if (usersSidebar) {
+      usersSidebar.classList.remove('hidden');
     }
     
-    // Show microphone permission modal after room is joined
-    showMicPermissionModal();
+    // Display all users in sidebar and update count
+    if (data.users && Array.isArray(data.users)) {
+      console.log(`Received ${data.users.length} users from server:`, data.users);
+      displayUsers(data.users);
+      updateUserCount(data.users.length);
+    } else {
+      console.warn('No users data received or invalid format:', data);
+    }
+    
   });
 
   socket.on('room-error', (data) => {
@@ -129,19 +103,16 @@ async function initRoom() {
 
   socket.on('user-joined', (data) => {
     console.log('User joined:', data);
-    // Update UI
-    if (data.user && data.user.name && data.user.name !== 'Anonymous') {
+    // Update UI - show all users
+    if (data.user) {
       addUserToList(data.user);
       updateUserCount(usersList.length);
     }
-    // WebRTC connection is handled by the WebRTC module
   });
 
   socket.on('user-left', (data) => {
     console.log('User left:', data);
     if (data.userId) {
-      // Close WebRTC connection with this user
-      WebRTC.closePeerConnection(data.userId);
       removeUserFromList(data.userId);
       updateUserCount(usersList.length);
     }
@@ -149,11 +120,7 @@ async function initRoom() {
 
   socket.on('disconnect', () => {
     console.log('Disconnected from server');
-    // Clean up all WebRTC connections
-    WebRTC.cleanup();
   });
-  
-  // WebRTC signaling events are handled by the WebRTC module
 }
 
 // Auto-hide controls
@@ -190,128 +157,14 @@ document.addEventListener('mousedown', showControls);
 // Show controls initially
 showControls();
 
-// Microphone Permission Modal
-function showMicPermissionModal() {
-  // Check if getUserMedia is supported first
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    console.log('getUserMedia not supported, skipping permission modal');
-    
-    // Show error message instead
-    const isSecureContext = window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-    let errorMessage = 'Microphone access is not supported. ';
-    if (!isSecureContext && location.protocol === 'http:') {
-      errorMessage += 'Please access this site over HTTPS or use localhost (http://localhost:3000).';
-    } else {
-      errorMessage += 'Please use a modern browser that supports the MediaDevices API.';
-    }
-    alert(errorMessage);
-    return;
-  }
-  
-  // Check if permission was already granted or denied
-  const permissionState = localStorage.getItem('micPermissionState');
-  
-  // Don't show modal if permission was already denied
-  if (permissionState === 'denied') {
-    console.log('Microphone permission was previously denied, skipping modal');
-    return;
-  }
-  
-  // Don't show modal if permission was already granted
-  if (permissionState === 'granted' && WebRTC.getStream()) {
-    console.log('Microphone permission already granted');
-    return;
-  }
-  
-  const modal = document.getElementById('mic-permission-modal');
-  if (modal) {
-    modal.classList.add('show');
-    
-    // Setup button handlers
-    const allowBtn = document.getElementById('allow-mic-btn');
-    const denyBtn = document.getElementById('deny-mic-btn');
-    
-    if (allowBtn) {
-      allowBtn.onclick = async () => {
-        try {
-          await WebRTC.requestMicrophonePermission();
-          // Enable mic button UI after permission granted
-          const micBtn = document.getElementById('mic-btn');
-          const micIcon = micBtn.querySelector('img');
-          if (micBtn && micIcon) {
-            micBtn.classList.remove('off');
-            micIcon.src = '../assets/icons/mic.svg';
-            isMicOn = true;
-          }
-          hideMicPermissionModal();
-        } catch (error) {
-          console.error('Error requesting microphone permission:', error);
-          // Modal will stay open, user can try again or click "Not Now"
-        }
-      };
-    }
-    
-    if (denyBtn) {
-      denyBtn.onclick = () => {
-        localStorage.setItem('micPermissionState', 'denied');
-        hideMicPermissionModal();
-      };
-    }
-  }
-}
-
-function hideMicPermissionModal() {
-  const modal = document.getElementById('mic-permission-modal');
-  if (modal) {
-    modal.classList.remove('show');
-  }
-}
-
-// Toggle microphone
-let isMicOn = false;
+// Toggle microphone (disabled - WebRTC removed)
 const micBtn = document.getElementById('mic-btn');
-const micIcon = micBtn.querySelector('img');
-micBtn.addEventListener('click', async function() {
-  try {
-    if (!isMicOn) {
-      // Turn mic ON
-      const stream = WebRTC.getStream();
-      if (!stream) {
-        // Request permission if not already granted
-        try {
-          await WebRTC.getLocalAudioStream();
-        } catch (error) {
-          // Permission denied or error - show modal again
-          showMicPermissionModal();
-          return;
-        }
-      }
-      
-      // Enable microphone through WebRTC module
-      if (WebRTC.enableMicrophone()) {
-        this.classList.remove('off');
-        micIcon.src = '../assets/icons/mic.svg';
-        isMicOn = true;
-        console.log('Microphone: ON');
-        hideMicPermissionModal(); // Hide modal if it's still showing
-      }
-    } else {
-      // Turn mic OFF
-      WebRTC.disableMicrophone();
-
-      this.classList.add('off');
-      micIcon.src = '../assets/icons/mic-off.svg';
-      isMicOn = false;
-      console.log('Microphone: OFF');
-    }
-  } catch (error) {
-    console.error('Error toggling microphone:', error);
-    // Keep the UI state consistent
-    this.classList.add('off');
-    micIcon.src = '../assets/icons/mic-off.svg';
-    isMicOn = false;
-  }
-});
+if (micBtn) {
+  micBtn.addEventListener('click', function() {
+    console.log('Microphone feature disabled');
+    alert('Microphone feature is currently disabled.');
+  });
+}
 
 // Toggle camera
 let isCameraOn = false;
@@ -412,9 +265,6 @@ toggleUiBtn.classList.add('active');
 document.getElementById('leave-btn').addEventListener('click', function() {
   console.log('Leaving meeting...');
   
-  // Clean up WebRTC connections
-  WebRTC.cleanup();
-  
   // Notify server that user is leaving
   if (socket && currentRoomId && userId) {
     socket.emit('leave-room', {
@@ -432,24 +282,34 @@ document.getElementById('leave-btn').addEventListener('click', function() {
 let usersList = [];
 
 function displayUsers(users) {
-  // Filter out anonymous users
-  const loggedInUsers = users.filter(user => user.name && user.name !== 'Anonymous');
-  usersList = loggedInUsers;
+  // Display all users (including anonymous)
+  usersList = users || [];
   const usersListElement = document.getElementById('users-list');
-  if (!usersListElement) return;
+  if (!usersListElement) {
+    console.warn('Users list element not found');
+    return;
+  }
   
   usersListElement.innerHTML = '';
   
-  // Display all logged-in users
-  loggedInUsers.forEach(user => {
+  // Display all users
+  users.forEach(user => {
     addUserToList(user);
   });
+  
+  console.log(`Displayed ${users.length} users in sidebar`);
 }
 
 function addUserToList(user) {
+  if (!user || !user.userId) {
+    console.warn('Invalid user data:', user);
+    return;
+  }
+  
   // Check if user already exists in the DOM
   const existingItem = document.getElementById(`user-${user.userId}`);
   if (existingItem) {
+    console.log(`User ${user.userId} already in list`);
     return;
   }
   
@@ -459,7 +319,10 @@ function addUserToList(user) {
   }
   
   const usersListElement = document.getElementById('users-list');
-  if (!usersListElement) return;
+  if (!usersListElement) {
+    console.warn('Users list element not found');
+    return;
+  }
   
   const userItem = document.createElement('div');
   userItem.className = 'user-item';
@@ -468,7 +331,10 @@ function addUserToList(user) {
   const avatar = document.createElement('img');
   avatar.className = 'user-avatar';
   avatar.src = user.profileImage || '../assets/icons/people.svg';
-  avatar.alt = user.name;
+  avatar.alt = user.name || 'User';
+  avatar.onerror = function() {
+    this.src = '../assets/icons/people.svg';
+  };
   
   const name = document.createElement('div');
   name.className = 'user-name';
@@ -477,6 +343,8 @@ function addUserToList(user) {
   userItem.appendChild(avatar);
   userItem.appendChild(name);
   usersListElement.appendChild(userItem);
+  
+  console.log(`Added user to list: ${user.name || 'Anonymous'} (${user.userId})`);
 }
 
 function removeUserFromList(userId) {
@@ -493,6 +361,9 @@ function updateUserCount(count) {
   const userCountElement = document.getElementById('user-count-number');
   if (userCountElement) {
     userCountElement.textContent = count;
+    console.log(`Updated user count to: ${count}`);
+  } else {
+    console.warn('User count element not found');
   }
 }
 
@@ -568,9 +439,6 @@ function fallbackCopy(roomId, copyIcon) {
 
 // Disconnect socket when user leaves the page
 function disconnectOnLeave() {
-  // Clean up WebRTC connections
-  WebRTC.cleanup();
-  
   if (socket && socket.connected) {
     // Try to notify server that user is leaving (non-blocking)
     if (currentRoomId && userId) {
@@ -583,7 +451,7 @@ function disconnectOnLeave() {
         
         // Try to send via beacon API (more reliable for page unload)
         if (navigator.sendBeacon) {
-          navigator.sendBeacon(`${SERVER_URL}/api/users/leave`, data);
+          navigator.sendBeacon(`${getAPIURL()}/users/leave`, data);
         }
         
         // Also try socket emit (may not complete, but server will handle via disconnect)
