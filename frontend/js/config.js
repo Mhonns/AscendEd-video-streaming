@@ -23,12 +23,12 @@ const ServerConfig = {
   signaling: {
     primary: {
       host: 'streaming.nathadon.com',
-      port: 10443,
+      port: 30000,
       protocol: 'https'
     },
     fallback: {
       host: 'localhost',
-      port: 10443,
+      port: 30000,
       protocol: 'https'
     }
   },
@@ -59,26 +59,6 @@ function buildServerURL(config) {
 }
 
 /**
- * Test if a server is reachable
- */
-async function testServerConnection(url) {
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Timeout')), ServerConfig.connectionTimeout);
-  });
-  
-  try {
-    const response = await Promise.race([
-      fetch(`${url}/api/rooms/test`, { method: 'GET' }),
-      timeoutPromise
-    ]);
-    // If we get any response (even 404), server exists
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-/**
  * Determine the best server URL to use
  * Tries primary first, then alternative, then fallback
  */
@@ -100,15 +80,10 @@ async function determineServerURL() {
     const url = buildServerURL(server.config);
     console.log(`Testing ${server.name} server: ${url}`);
     
-    const isReachable = await testServerConnection(url);
-    if (isReachable) {
-      cachedServerURL = url;
-      cachedAPIURL = `${url}/api`;
-      console.log(`✓ Using ${server.name} server: ${cachedServerURL}`);
-      return cachedServerURL;
-    } else {
-      console.log(`✗ ${server.name} server not reachable`);
-    }
+    cachedServerURL = url;
+    cachedAPIURL = `${url}/api`;
+    console.log(`Using ${server.name} server: ${cachedServerURL}`);
+    return cachedServerURL;
   }
   
   // If all fail, use fallback anyway
@@ -166,15 +141,9 @@ async function getSignalingServerURL() {
   
   // Use primary if it matches current protocol, otherwise fallback
   cachedSignalingURL = (ServerConfig.signaling.primary.protocol === protocol) ? primaryURL : fallbackURL;
+  console.log('Signaling server URL:', cachedSignalingURL);
   
   return cachedSignalingURL;
-}
-
-function getSignalingURL() {
-  if (cachedSignalingURL) {
-    return cachedSignalingURL;
-  }
-  return buildServerURL(ServerConfig.signaling.fallback);
 }
 
 // Export configuration and functions
@@ -186,7 +155,6 @@ if (typeof module !== 'undefined' && module.exports) {
     getServerURL,
     getAPIURL,
     getSignalingServerURL,
-    getSignalingURL,
     resetServerURL,
     buildServerURL,
     getCurrentProtocol
@@ -198,7 +166,6 @@ if (typeof module !== 'undefined' && module.exports) {
   window.getServerURL = getServerURL;
   window.getAPIURL = getAPIURL;
   window.getSignalingServerURL = getSignalingServerURL;
-  window.getSignalingURL = getSignalingURL;
   window.resetServerURL = resetServerURL;
 }
 

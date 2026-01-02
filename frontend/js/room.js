@@ -36,18 +36,11 @@ async function initRoom() {
   await determineServerURL();
 
   // Validate room exists before connecting
-  try {
-    const response = await fetch(`${getAPIURL()}/rooms/${roomId}`);
-    const data = await response.json();
-    
-    if (!response.ok || !data.success) {
-      alert(`Room "${roomId}" not found. Please check the room code and try again.`);
-      window.location.href = '../index.html';
-      return;
-    }
-  } catch (error) {
-    console.error('Error validating room:', error);
-    alert('Failed to validate room. Please check if the server is running.');
+  const response = await fetch(`${getAPIURL()}/rooms/${roomId}`);
+  const data = await response.json();
+  
+  if (!response.ok || !data.success) {
+    alert(`Room "${roomId}" not found. Please check the room code and try again.`);
     window.location.href = '../index.html';
     return;
   }
@@ -74,14 +67,9 @@ async function initRoom() {
     });
   });
 
-  socket.on('room-joined', (data) => {
+  socket.on('room-joined', async (data) => {
     console.log('Successfully joined room:', data);
     document.querySelector('.room-name').textContent = data.roomName;
-    
-    // Ensure sidebar is visible
-    if (usersSidebar) {
-      usersSidebar.classList.remove('hidden');
-    }
     
     // Display all users in sidebar and update count
     if (data.users && Array.isArray(data.users)) {
@@ -92,6 +80,19 @@ async function initRoom() {
       console.warn('No users data received or invalid format:', data);
     }
     
+    // Initialize WebRTC signaling connection when room is joined
+    if (window.WebRTCModule && typeof window.WebRTCModule.initWebRTCSignaling === 'function') {
+      try {
+        // Pre-initialize WebRTC signaling connection (without requesting media)
+        console.log('Initializing WebRTC signaling connection...');
+        await window.WebRTCModule.initWebRTCSignaling();
+        console.log('WebRTC signaling initialized successfully');
+      } catch (error) {
+        console.error('Error initializing WebRTC:', error);
+      }
+    } else {
+      console.warn('WebRTC module not available yet');
+    }
   });
 
   socket.on('room-error', (data) => {
@@ -157,31 +158,59 @@ document.addEventListener('mousedown', showControls);
 // Show controls initially
 showControls();
 
-// Toggle microphone (disabled - WebRTC removed)
+// Toggle microphone
 const micBtn = document.getElementById('mic-btn');
-if (micBtn) {
-  micBtn.addEventListener('click', function() {
-    console.log('Microphone feature disabled');
-    alert('Microphone feature is currently disabled.');
+const micIcon = micBtn ? micBtn.querySelector('img') : null;
+let isMicOn = false;
+
+if (micBtn && micIcon) {
+  micBtn.addEventListener('click', async function() {
+    if (!isMicOn) {
+      // Request microphone permission and initialize WebRTC
+      const success = await window.WebRTCModule?.requestMicrophonePermission();
+      if (success) {
+        isMicOn = true;
+        this.classList.remove('off');
+        micIcon.src = '../assets/icons/mic.svg';
+        console.log('Microphone enabled');
+      }
+    } else {
+      // Toggle microphone off
+      window.WebRTCModule?.toggleMicrophone(false);
+      isMicOn = false;
+      this.classList.add('off');
+      micIcon.src = '../assets/icons/mic-off.svg';
+      console.log('Microphone disabled');
+    }
   });
 }
 
 // Toggle camera
-let isCameraOn = false;
 const cameraBtn = document.getElementById('camera-btn');
-const cameraIcon = cameraBtn.querySelector('img');
-cameraBtn.addEventListener('click', function() {
-  isCameraOn = !isCameraOn;
-  if (isCameraOn) {
-    this.classList.remove('off');
-    cameraIcon.src = '../assets/icons/camera.svg';
-  } else {
-    this.classList.add('off');
-    cameraIcon.src = '../assets/icons/camera-off.svg';
-  }
-  console.log('Camera:', isCameraOn ? 'ON' : 'OFF');
-  // TODO: Implement actual camera toggle
-});
+const cameraIcon = cameraBtn ? cameraBtn.querySelector('img') : null;
+let isCameraOn = false;
+
+if (cameraBtn && cameraIcon) {
+  cameraBtn.addEventListener('click', async function() {
+    if (!isCameraOn) {
+      // Request camera permission and initialize WebRTC
+      const success = await window.WebRTCModule?.requestCameraPermission();
+      if (success) {
+        isCameraOn = true;
+        this.classList.remove('off');
+        cameraIcon.src = '../assets/icons/camera.svg';
+        console.log('Camera enabled');
+      }
+    } else {
+      // Toggle camera off
+      window.WebRTCModule?.toggleCamera(false);
+      isCameraOn = false;
+      this.classList.add('off');
+      cameraIcon.src = '../assets/icons/camera-off.svg';
+      console.log('Camera disabled');
+    }
+  });
+}
 
 // Toggle recording
 let isRecording = false; // Start with recording on

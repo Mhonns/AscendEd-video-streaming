@@ -54,36 +54,67 @@ const rooms = {};
 io.on("connection", socket => {
   socket.on("join", data => {
       // let a new user join to the room
-      const roomId = data.room
+      const roomId = data.room;
       socket.join(roomId);
       socketToRoom[socket.id] = roomId;
 
-      // persist the new user in the room
-      if (rooms[roomId]) {
-          rooms[roomId].push({id: socket.id, name: data.name});
+      // Check if user already exists in room (re-join scenario)
+      const existingUserIndex = rooms[roomId] ? rooms[roomId].findIndex(user => user.id === socket.id) : -1;
+      
+      if (existingUserIndex >= 0) {
+          // User re-joining, update their info
+          rooms[roomId][existingUserIndex] = {id: socket.id, name: data.name};
+          console.log("[re-joined] room:" + roomId + " name: " + data.name);
       } else {
-          rooms[roomId] = [{id: socket.id, name: data.name}];
+          // New user joining
+          if (rooms[roomId]) {
+              rooms[roomId].push({id: socket.id, name: data.name});
+          } else {
+              rooms[roomId] = [{id: socket.id, name: data.name}];
+          }
+          console.log("[joined] room:" + roomId + " name: " + data.name);
       }
 
-      // sends a list of joined users to a new user
-      const users = rooms[data.room].filter(user => user.id !== socket.id);
+      // Always sends a list of joined users (including on re-join for renegotiation)
+      const users = rooms[roomId] ? rooms[roomId].filter(user => user.id !== socket.id) : [];
       io.sockets.to(socket.id).emit("room_users", users);
-      console.log("[joined] room:" + data.room + " name: " + data.name);
+      console.log("Sent room_users to " + socket.id + ": " + users.length + " users");
   });
 
   socket.on("offer", sdp => {
-    socket.broadcast.emit("getOffer", sdp);
-    console.log("offer: " + socket.id);
+    const roomId = socketToRoom[socket.id];
+    if (roomId) {
+      socket.to(roomId).emit("getOffer", sdp);
+      console.log("offer from " + socket.id + " to room " + roomId);
+    } else {
+      // Fallback to broadcast if room not found
+      socket.broadcast.emit("getOffer", sdp);
+      console.log("offer: " + socket.id + " (no room)");
+    }
   });
 
   socket.on("answer", sdp => {
+    const roomId = socketToRoom[socket.id];
+    if (roomId) {
+      socket.to(roomId).emit("getAnswer", sdp);
+      console.log("answer from " + socket.id + " to room " + roomId);
+    } else {
+      // Fallback to broadcast if room not found
       socket.broadcast.emit("getAnswer", sdp);
-      console.log("answer: " + socket.id);
+      console.log("answer: " + socket.id + " (no room)");
+    }
   });
 
   socket.on("candidate", candidate => {
+    const roomId = socketToRoom[socket.id];
+    if (roomId) {
+      socket.to(roomId).emit("getCandidate", candidate);
+      console.log("candidate from " + socket.id + " to room " + roomId);
+    } else {
+      // Fallback to broadcast if room not found
       socket.broadcast.emit("getCandidate", candidate);
-      console.log("candidate: " + socket.id);
+      console.log("candidate: " + socket.id + " (no room)");
+    }
   });
 
   socket.on("disconnect", () => {
