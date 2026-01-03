@@ -294,3 +294,141 @@ input:focus {
     height: 18px;
   }
 }
+
+/* Payment Modal */
+.payment-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.payment-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.payment-modal-content {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  position: relative;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.payment-modal.show .payment-modal-content {
+  transform: scale(1);
+}
+
+.payment-close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s ease;
+  color: #333;
+}
+
+.payment-close-btn:hover {
+  background: rgba(0, 0, 0, 0.2);
+  transform: scale(1.1);
+}
+
+.payment-close-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.payment-modal-content h2 {
+  color: #333;
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  margin-top: 0;
+}
+
+.qr-code-container {
+  margin: 20px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.qr-code-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 2px solid #ddd;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.payment-note {
+  color: #666;
+  font-size: 14px;
+  margin-top: 20px;
+  margin-bottom: 0;
+}
+
+/* Responsive styles for payment modal */
+@media (max-width: 768px) {
+  .payment-modal-content {
+    padding: 25px 20px;
+    max-width: 90%;
+  }
+
+  .payment-modal-content h2 {
+    font-size: 20px;
+    margin-bottom: 15px;
+  }
+
+  .payment-note {
+    font-size: 13px;
+    margin-top: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .payment-modal-content {
+    padding: 20px 15px;
+  }
+
+  .payment-modal-content h2 {
+    font-size: 18px;
+  }
+
+  .payment-close-btn {
+    width: 28px;
+    height: 28px;
+    top: 10px;
+    right: 10px;
+  }
+
+  .payment-close-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}

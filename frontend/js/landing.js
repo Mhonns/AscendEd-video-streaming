@@ -95,6 +95,22 @@ function viewRecordings() {
   // window.location.href = 'pages/recordings.html';
 }
 
+function showPaymentQR() {
+  const modal = document.getElementById('payment-modal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+  }
+}
+
+function closePaymentQR() {
+  const modal = document.getElementById('payment-modal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = ''; // Restore scrolling
+  }
+}
+
 function generateRoomId() {
   return Math.random().toString(36).substring(2, 9).toUpperCase();
 }

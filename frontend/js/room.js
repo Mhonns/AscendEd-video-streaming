@@ -80,6 +80,11 @@ async function initRoom() {
       console.warn('No users data received or invalid format:', data);
     }
     
+    // Load chat history if available
+    if (data.chatHistory && Array.isArray(data.chatHistory) && window.ChatModule) {
+      window.ChatModule.loadChatHistory(data.chatHistory);
+    }
+    
     // Initialize WebRTC signaling connection when room is joined
     if (window.WebRTCModule && typeof window.WebRTCModule.initWebRTCSignaling === 'function') {
       try {
@@ -122,6 +127,11 @@ async function initRoom() {
   socket.on('disconnect', () => {
     console.log('Disconnected from server');
   });
+
+  // Initialize chat module
+  if (window.ChatModule) {
+    window.ChatModule.init(socket, userId, roomId);
+  }
 }
 
 // Auto-hide controls
@@ -262,12 +272,6 @@ peopleBtn.addEventListener('click', function() {
 // Set people button to active by default
 peopleBtn.classList.add('active');
 
-// Open chat
-document.getElementById('chat-btn').addEventListener('click', function() {
-  console.log('Open chat clicked');
-  // TODO: Open chat panel
-});
-
 // Toggle auto-hide
 const toggleUiBtn = document.getElementById('toggle-ui-btn');
 toggleUiBtn.addEventListener('click', function() {
@@ -289,6 +293,15 @@ toggleUiBtn.addEventListener('click', function() {
 
 // Set toggle-ui button to active by default (pinned)
 toggleUiBtn.classList.add('active');
+
+// Settings button
+const settingsBtn = document.getElementById('settings-btn');
+if (settingsBtn) {
+  settingsBtn.addEventListener('click', function() {
+    // TODO: Implement settings functionality
+    console.log('Settings clicked');
+  });
+}
 
 // Leave meeting
 document.getElementById('leave-btn').addEventListener('click', function() {
@@ -524,4 +537,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Initialize when page loads
-window.addEventListener('DOMContentLoaded', initRoom);
+window.addEventListener('DOMContentLoaded', () => {
+  initRoom();
+});

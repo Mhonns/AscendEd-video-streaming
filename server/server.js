@@ -4,6 +4,7 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const chatModule = require('./chat');
 
 const app = express();
 
@@ -96,6 +97,8 @@ function leaveRoom(roomId, userId) {
         const currentRoom = rooms.get(roomId);
         if (currentRoom && currentRoom.participants.size === 0) {
           rooms.delete(roomId);
+          // Clear chat messages when room is destroyed
+          chatModule.clearRoomMessages(roomId);
         }
       }, 60000); // Remove after 1 minute of being empty
     }
@@ -262,11 +265,15 @@ io.on('connection', (socket) => {
       .map(uid => users.get(uid))
       .filter(user => user && user.name && user.name !== 'Anonymous'); // Only include users with saved profiles
     
+    // Get chat history for the room
+    const chatHistory = chatModule.getRoomMessages(roomId);
+    
     const roomJoinedData = {
       roomId: room.id,
       roomName: room.name,
       participantCount: room.participants.size,
-      users: roomUsers
+      users: roomUsers,
+      chatHistory: chatHistory // Include chat history when user joins
     };
     
     socket.emit('room-joined', roomJoinedData);
@@ -318,6 +325,49 @@ io.on('connection', (socket) => {
       const { roomId, userId } = connectionInfo;
       handleUserLeave(socket, roomId, userId);
       socketConnections.delete(socket.id);
+    }
+  });
+
+  // Handle chat messages
+  socket.on('chat-message', (data) => {
+    const { roomId, userId, userName, profileImage, message, timestamp } = data;
+    
+    // Validate required fields
+    if (!roomId || !userId || !message) {
+      socket.emit('chat-error', { message: 'Invalid message data' });
+      return;
+    }
+
+    // Verify room exists and is active
+    const room = getRoom(roomId);
+    if (!room || !room.isActive) {
+      socket.emit('chat-error', { message: 'Room not found or inactive' });
+      return;
+    }
+
+    // Verify user is in the room
+    if (!room.participants.has(userId)) {
+      socket.emit('chat-error', { message: 'User not in room' });
+      return;
+    }
+
+    try {
+      // Add message to chat queue
+      const savedMessage = chatModule.addMessage(roomId, {
+        userId,
+        userName: userName || 'Anonymous',
+        profileImage: profileImage || null,
+        message: message.trim(),
+        timestamp: timestamp || new Date().toISOString()
+      });
+
+      // Broadcast message to all users in the room (including sender)
+      io.to(roomId).emit('chat-message', savedMessage);
+      
+      console.log(`Chat message from ${userName || 'Anonymous'} (${userId}) in room "${room.name}" (${roomId}): ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`);
+    } catch (error) {
+      console.error('Error handling chat message:', error);
+      socket.emit('chat-error', { message: 'Failed to send message' });
     }
   });
 });
