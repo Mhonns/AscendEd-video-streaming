@@ -1,0 +1,300 @@
+/* Button Styles */
+
+/* Permission Modal Buttons */
+.permission-btn {
+  padding: 12px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.allow-btn {
+  background: #4CAF50;
+  color: white;
+}
+
+.allow-btn:hover {
+  background: #45a049;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.allow-btn:active {
+  transform: translateY(0);
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Copy Button */
+.copy-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.copy-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.copy-icon {
+  width: 14px;
+  height: 14px;
+  filter: invert(1);
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.copy-btn:hover .copy-icon {
+  opacity: 0.9;
+}
+
+/* Icon Buttons (Top Controls) */
+.icon-btn {
+  width: 45px;
+  height: 45px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.icon-btn.active {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.icon-btn img {
+  width: 20px;
+  height: 20px;
+  filter: invert(1);
+}
+
+.icon-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  background: #ff3b30;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.8);
+  display: none; /* Hidden for now */
+}
+
+#recording-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+#recording-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+#recording-btn.recording {
+  background: rgba(0, 122, 255, 0.3);
+  border-color: rgba(0, 122, 255, 0.6);
+}
+
+#recording-btn.recording:hover {
+  background: rgba(0, 122, 255, 0.4);
+  border-color: rgba(0, 122, 255, 0.8);
+}
+
+/* Control Buttons (Bottom Controls) */
+.control-btn {
+  width: 55px;
+  height: 55px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.control-btn img {
+  width: 24px;
+  height: 24px;
+  filter: invert(1);
+}
+
+.control-btn.off {
+  background: rgba(255, 59, 48, 0.2);
+  border-color: rgba(255, 59, 48, 0.5);
+}
+
+.control-btn.off:hover {
+  background: rgba(255, 59, 48, 0.3);
+}
+
+.leave-btn {
+  background: rgba(255, 59, 48, 0.2);
+  border-color: rgba(255, 59, 48, 0.5);
+}
+
+.leave-btn:hover {
+  background: rgba(255, 59, 48, 0.4);
+}
+
+/* Chat Send Button */
+.chat-send-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(0, 122, 255, 0.5);
+  background: rgba(0, 122, 255, 0.3);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.chat-send-btn:hover {
+  background: transparent;
+  border-color: rgba(0, 122, 255, 0.7);
+  transform: scale(1.05);
+}
+
+.chat-send-btn:active {
+  transform: scale(0.95);
+}
+
+/* Responsive Button Styles */
+@media (max-width: 768px) {
+  .copy-btn {
+    width: 20px;
+    height: 20px;
+  }
+
+  .copy-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .icon-btn img {
+    width: 18px;
+    height: 18px;
+  }
+
+  .control-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .control-btn img {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .copy-btn {
+    width: 18px;
+    height: 18px;
+  }
+
+  .copy-icon {
+    width: 11px;
+    height: 11px;
+  }
+
+  .icon-btn {
+    width: 35px;
+    height: 35px;
+  }
+
+  .icon-btn img {
+    width: 16px;
+    height: 16px;
+  }
+
+  .control-btn {
+    width: 45px;
+    height: 45px;
+  }
+
+  .control-btn img {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .icon-btn img {
+    width: 14px;
+    height: 14px;
+  }
+
+  .control-btn {
+    width: 42px;
+    height: 42px;
+  }
+
+  .control-btn img {
+    width: 16px;
+    height: 16px;
+  }
+}
+

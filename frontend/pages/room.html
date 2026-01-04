@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video Conference Room</title>
   <link rel="stylesheet" href="../css/room.css">
+  <link rel="stylesheet" href="../css/room-buttons.css">
+  <link rel="stylesheet" href="../css/toggle-frame.css">
 </head>
 <body>
   <!-- Top Bar -->
@@ -37,6 +39,9 @@
       <button class="icon-btn" id="toggle-ui-btn" title="Toggle Auto-Hide">
         <img src="../assets/icons/pin.svg" alt="Pin">
       </button>
+      <button class="icon-btn" id="fullscreen-btn" title="Toggle Fullscreen">
+        <img src="../assets/icons/fullscreen.svg" alt="Fullscreen">
+      </button>
       <button class="icon-btn" id="settings-btn" title="Settings">
         <img src="../assets/icons/setting.svg" alt="Settings">
       </button>
@@ -47,7 +52,7 @@
   <div class="video-container">
     <div class="video-grid" id="video-grid">
       <div class="video-placeholder" id="video-placeholder">
-        <div class="placeholder-text">No one is sharing their screen..</div>
+        <div class="placeholder-text">Welcome to the meeting!</div>
       </div>
     </div>
   </div>
@@ -108,8 +113,13 @@
 
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script src="../js/config.js"></script>
+  <script src="../js/room-utils.js"></script>
+  <script src="../js/ui-controls.js"></script>
+  <script src="../js/users.js"></script>
+  <script src="../js/socket-handler.js"></script>
+  <script src="../js/buttons.js"></script>
   <script src="../js/chat.js"></script>
-  <script src="../js/room.js"></script>
   <script src="../js/webrtc.js"></script>
+  <script src="../js/room.js"></script>
 </body>
 </html>

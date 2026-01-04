@@ -8,132 +8,152 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// SSL Certificate paths
-const SSL_CERT_PATH = '/etc/letsencrypt/live/streaming.nathadon.com/fullchain.pem';
-const SSL_KEY_PATH = '/etc/letsencrypt/live/streaming.nathadon.com/privkey.pem';
+// SSL Configuration
+const SSL_CERT = '/etc/letsencrypt/live/streaming.nathadon.com/fullchain.pem';
+const SSL_KEY = '/etc/letsencrypt/live/streaming.nathadon.com/privkey.pem';
 
-// Check if certificate files exist
-let sslOptions = null;
-try {
-  if (fs.existsSync(SSL_CERT_PATH) && fs.existsSync(SSL_KEY_PATH)) {
-    sslOptions = {
-      cert: fs.readFileSync(SSL_CERT_PATH),
-      key: fs.readFileSync(SSL_KEY_PATH)
-    };
-    console.log('SSL certificates loaded successfully');
-  } else {
-    console.warn('SSL certificates not found. Server will run without HTTPS.');
-    console.warn(`Looking for cert: ${SSL_CERT_PATH}`);
-    console.warn(`Looking for key: ${SSL_KEY_PATH}`);
-  }
-} catch (error) {
-  console.error('Error loading SSL certificates:', error.message);
-  console.warn('Server will run without HTTPS.');
-}
-
-// Create HTTPS server if certificates are available, otherwise fallback to HTTP
 let server;
-if (sslOptions) {
+try {
+  const sslOptions = {
+    cert: fs.readFileSync(SSL_CERT),
+    key: fs.readFileSync(SSL_KEY)
+  };
   server = https.createServer(sslOptions, app);
-} else {
+  console.log(' HTTPS server created');
+} catch (error) {
   server = http.createServer(app);
-  console.warn('Running in HTTP mode. For production, ensure SSL certificates are configured.');
+  console.warn(' Running HTTP (SSL certs not found)');
 }
 
+// Socket.IO setup
 const io = socketIo(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Initialize room storage
-const socketToRoom = {};
+// Room storage: { roomId: [{ id, name }, ...] }
 const rooms = {};
+const socketToRoom = {}; // socketId -> roomId
 
 io.on("connection", socket => {
-    socket.on("join", data => {
-        // let a new user join to the room
-      const roomId = data.room;
-        socket.join(roomId);
-        socketToRoom[socket.id] = roomId;
-
-      // Check if user already exists in room (re-join scenario)
-      const existingUserIndex = rooms[roomId] ? rooms[roomId].findIndex(user => user.id === socket.id) : -1;
+  console.log(' Client connected:', socket.id);
+  
+  // User joins a room
+  socket.on("join", ({ room, name }) => {
+    socket.join(room);
+    socketToRoom[socket.id] = room;
+    
+    // Initialize room if needed
+    if (!rooms[room]) {
+      rooms[room] = [];
+    }
+    
+    // Add or update user in room
+    const existingIndex = rooms[room].findIndex(u => u.id === socket.id);
+    if (existingIndex >= 0) {
+      rooms[room][existingIndex] = { id: socket.id, name };
+      console.log(` ${socket.id} rejoined room: ${room}`);
+    } else {
+      rooms[room].push({ id: socket.id, name });
+      console.log(` ${socket.id} joined room: ${room}`);
+    }
+    
+    // Send ALL users in room to EVERYONE (keeps all clients in sync)
+    io.to(room).emit("room_users", rooms[room]);
+    
+    // Notify others that someone joined
+    socket.to(room).emit("user_joined", { id: socket.id, name });
+  });
+  
+  // Forward offer with sender info
+  socket.on("offer", ({ sdp, to }) => {
+    if (to) {
+      // Send to specific peer
+      io.to(to).emit("getOffer", {
+        sdp,
+        from: socket.id
+      });
+      console.log(` Offer: ${socket.id} → ${to}`);
+    } else {
+      // Broadcast to room (fallback)
+      const room = socketToRoom[socket.id];
+      if (room) {
+        socket.to(room).emit("getOffer", {
+          sdp,
+          from: socket.id
+        });
+        console.log(` Offer: ${socket.id} → room ${room}`);
+      }
+    }
+  });
+  
+  // Forward answer with sender info
+  socket.on("answer", ({ sdp, to }) => {
+    if (to) {
+      io.to(to).emit("getAnswer", {
+        sdp,
+        from: socket.id
+      });
+      console.log(` Answer: ${socket.id} → ${to}`);
+    } else {
+      // Broadcast to room (fallback)
+      const room = socketToRoom[socket.id];
+      if (room) {
+        socket.to(room).emit("getAnswer", {
+          sdp,
+          from: socket.id
+        });
+        console.log(` Answer: ${socket.id} → room ${room}`);
+      }
+    }
+  });
+  
+  // Forward ICE candidate with sender info
+  socket.on("candidate", ({ candidate, to }) => {
+    if (to) {
+      io.to(to).emit("getCandidate", {
+        candidate,
+        from: socket.id
+      });
+      console.log(` ICE: ${socket.id} → ${to}`);
+    } else {
+      // Broadcast to room (fallback)
+      const room = socketToRoom[socket.id];
+      if (room) {
+        socket.to(room).emit("getCandidate", {
+          candidate,
+          from: socket.id
+        });
+        console.log(` ICE: ${socket.id} → room ${room}`);
+      }
+    }
+  });
+  
+  // Handle disconnect
+  socket.on("disconnect", () => {
+    const room = socketToRoom[socket.id];
+    if (room && rooms[room]) {
+      // Remove user from room
+      rooms[room] = rooms[room].filter(u => u.id !== socket.id);
       
-      if (existingUserIndex >= 0) {
-          // User re-joining, update their info
-          rooms[roomId][existingUserIndex] = {id: socket.id, name: data.name};
-          console.log("[re-joined] room:" + roomId + " name: " + data.name);
-      } else {
-          // New user joining
-        if (rooms[roomId]) {
-            rooms[roomId].push({id: socket.id, name: data.name});
-        } else {
-            rooms[roomId] = [{id: socket.id, name: data.name}];
-          }
-          console.log("[joined] room:" + roomId + " name: " + data.name);
-        }
-
-      // Always sends a list of joined users (including on re-join for renegotiation)
-      const users = rooms[roomId] ? rooms[roomId].filter(user => user.id !== socket.id) : [];
-        io.sockets.to(socket.id).emit("room_users", users);
-      console.log("Sent room_users to " + socket.id + ": " + users.length + " users");
-    });
-
-    socket.on("offer", sdp => {
-    const roomId = socketToRoom[socket.id];
-    if (roomId) {
-      socket.to(roomId).emit("getOffer", sdp);
-      console.log("offer from " + socket.id + " to room " + roomId);
-    } else {
-      // Fallback to broadcast if room not found
-        socket.broadcast.emit("getOffer", sdp);
-      console.log("offer: " + socket.id + " (no room)");
+      // Notify others
+      socket.to(room).emit("user_exit", { id: socket.id });
+      
+      // Clean up empty rooms
+      if (rooms[room].length === 0) {
+        delete rooms[room];
+      }
+      
+      console.log(` ${socket.id} left room: ${room}`);
     }
-    });
-
-    socket.on("answer", sdp => {
-    const roomId = socketToRoom[socket.id];
-    if (roomId) {
-      socket.to(roomId).emit("getAnswer", sdp);
-      console.log("answer from " + socket.id + " to room " + roomId);
-    } else {
-      // Fallback to broadcast if room not found
-        socket.broadcast.emit("getAnswer", sdp);
-      console.log("answer: " + socket.id + " (no room)");
-    }
-    });
-
-    socket.on("candidate", candidate => {
-    const roomId = socketToRoom[socket.id];
-    if (roomId) {
-      socket.to(roomId).emit("getCandidate", candidate);
-      console.log("candidate from " + socket.id + " to room " + roomId);
-    } else {
-      // Fallback to broadcast if room not found
-        socket.broadcast.emit("getCandidate", candidate);
-      console.log("candidate: " + socket.id + " (no room)");
-    }
-    });
-
-    socket.on("disconnect", () => {
-        const roomId = socketToRoom[socket.id];
-        let room = rooms[roomId];
-        if (room) {
-            room = room.filter(user => user.id !== socket.id);
-            rooms[roomId] = room;
-        }
-        socket.broadcast.to(room).emit("user_exit", {id: socket.id});
-        console.log(`[${socketToRoom[socket.id]}]: ${socket.id} exit`);
-    });
+    delete socketToRoom[socket.id];
+  });
 });
 
 const PORT = process.env.PORT || 30000;
 server.listen(PORT, () => {
-  const protocol = sslOptions ? 'https' : 'http';
-  console.log(`Server is running on ${protocol}://localhost:${PORT}`);
-  if (sslOptions) {
-    console.log(`HTTPS server accessible at: https://streaming.nathadon.com:${PORT}`);
+  const protocol = server instanceof https.Server ? 'https' : 'http';
+  console.log(`\n Server running on ${protocol}://localhost:${PORT}`);
+  if (server instanceof https.Server) {
+    console.log(` Public URL: https://streaming.nathadon.com:${PORT}\n`);
   }
 });

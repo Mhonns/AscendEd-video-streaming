@@ -382,8 +382,8 @@ function handleUserLeave(socket, roomId, userId) {
     leaveRoom(roomId, userId);
     socket.leave(roomId);
     
-    console.log(`👋 ${userName} (${userId}) left room "${room.name}" (${roomId})`);
-    console.log(`   Room now has ${room.participants.size} participant(s)`);
+    console.log(` ${userName} (${userId}) left room "${room.name}" (${roomId})`);
+    console.log(`  Room now has ${room.participants.size} participant(s)`);
     
     socket.to(roomId).emit('user-left', {
       userId: userId,
