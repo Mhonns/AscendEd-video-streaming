@@ -12,6 +12,7 @@ function showControls() {
   topBar.classList.add('show');
   bottomControls.classList.add('show');
   document.body.classList.add('show-cursor');
+  document.body.classList.remove('ui-hidden');
   
   if (autoHideEnabled) {
     clearTimeout(hideTimeout);
@@ -25,6 +26,7 @@ function hideControls() {
   topBar.classList.remove('show');
   bottomControls.classList.remove('show');
   document.body.classList.remove('show-cursor');
+  document.body.classList.add('ui-hidden');
 }
 
 // Show controls on mouse move
@@ -44,6 +46,7 @@ window.UIControls = {
     if (!enabled) {
       clearTimeout(hideTimeout);
       showControls();
+      document.body.classList.remove('ui-hidden');
     }
   }
 };

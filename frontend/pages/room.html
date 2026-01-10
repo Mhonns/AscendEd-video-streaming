@@ -9,51 +9,75 @@
   <link rel="stylesheet" href="../css/toggle-frame.css">
 </head>
 <body>
-  <!-- Top Bar -->
-  <div class="top-bar" id="top-bar">
-    <div class="room-info">
-      <div class="room-name">Meeting Room</div>
-      <div class="room-id-container">
+  <!-- Main Room Wrapper -->
+  <div class="room-wrapper" id="room-wrapper">
+    <!-- Top Bar -->
+    <div class="top-bar" id="top-bar">
+      <div class="room-info">
+        <span class="room-name">Meeting Room</span>
+        <span class="room-divider">|</span>
         <span class="room-id">Room ID: ABC123XYZ</span>
         <button class="copy-btn" id="copy-room-id-btn" title="Copy Room ID">
           <img src="../assets/icons/copy.svg" alt="Copy" class="copy-icon">
         </button>
       </div>
-    </div>
-    <div class="user-count">
-      <img src="../assets/icons/people.svg" alt="People" class="people-icon">
-      <span id="user-count-number">0</span>
-    </div>
-    <div class="top-controls">
-      <button class="icon-btn" id="recording-btn" title="Stop Recording">
-        <img src="../assets/icons/recording-off.svg" alt="Recording">
-      </button>
-      <button class="icon-btn" id="people-btn" title="Participants">
-        <img src="../assets/icons/people.svg" alt="People">
-        <span class="icon-badge"></span>
-      </button>
-      <button class="icon-btn" id="chat-btn" title="Chat">
-        <img src="../assets/icons/chat.svg" alt="Chat">
-        <span class="icon-badge"></span>
-      </button>
-      <button class="icon-btn" id="toggle-ui-btn" title="Toggle Auto-Hide">
-        <img src="../assets/icons/pin.svg" alt="Pin">
-      </button>
-      <button class="icon-btn" id="fullscreen-btn" title="Toggle Fullscreen">
-        <img src="../assets/icons/fullscreen.svg" alt="Fullscreen">
-      </button>
-      <button class="icon-btn" id="settings-btn" title="Settings">
-        <img src="../assets/icons/setting.svg" alt="Settings">
-      </button>
-    </div>
-  </div>
-
-  <!-- Video Container -->
-  <div class="video-container">
-    <div class="video-grid" id="video-grid">
-      <div class="video-placeholder" id="video-placeholder">
-        <div class="placeholder-text">Welcome to the meeting!</div>
+      <div class="user-count">
+        <img src="../assets/icons/people.svg" alt="People" class="people-icon">
+        <span id="user-count-number">0</span>
       </div>
+      <div class="top-controls">
+        <button class="icon-btn" id="recording-btn" title="Stop Recording">
+          <img src="../assets/icons/recording-off.svg" alt="Recording">
+        </button>
+        <button class="icon-btn" id="people-btn" title="Participants">
+          <img src="../assets/icons/people.svg" alt="People">
+          <span class="icon-badge"></span>
+        </button>
+        <button class="icon-btn" id="chat-btn" title="Chat">
+          <img src="../assets/icons/chat.svg" alt="Chat">
+          <span class="icon-badge"></span>
+        </button>
+        <button class="icon-btn" id="toggle-ui-btn" title="Toggle Auto-Hide">
+          <img src="../assets/icons/pin.svg" alt="Pin">
+        </button>
+        <button class="icon-btn" id="fullscreen-btn" title="Toggle Fullscreen">
+          <img src="../assets/icons/fullscreen.svg" alt="Fullscreen">
+        </button>
+        <button class="icon-btn" id="settings-btn" title="Settings">
+          <img src="../assets/icons/setting.svg" alt="Settings">
+        </button>
+      </div>
+    </div>
+
+    <!-- Video Container -->
+    <div class="video-container">
+      <div class="video-grid" id="video-grid">
+        <div class="video-placeholder" id="video-placeholder">
+          <div class="placeholder-text">Welcome to the meeting!</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="bottom-controls" id="bottom-controls">
+      <button class="control-btn off" id="mic-btn" title="Microphone">
+        <img src="../assets/icons/mic-off.svg" alt="Mic">
+      </button>
+      <button class="control-btn off" id="camera-btn" title="Camera">
+        <img src="../assets/icons/camera-off.svg" alt="Camera">
+      </button>
+      <button class="control-btn" id="raise-hand-btn" title="Raise Hand">
+        <img src="../assets/icons/raise-hand.svg" alt="Raise Hand">
+      </button>
+      <button class="control-btn" id="reaction-btn" title="Reaction">
+        <img src="../assets/icons/reaction.svg" alt="Reaction">
+      </button>
+      <button class="control-btn" id="share-btn" title="Share Screen">
+        <img src="../assets/icons/screen.svg" alt="Share">
+      </button>
+      <button class="control-btn leave-btn" id="leave-btn" title="Leave">
+        <img src="../assets/icons/leave.svg" alt="Leave">
+      </button>
     </div>
   </div>
 
@@ -79,35 +103,19 @@
     </div>
   </div>
 
-  <!-- Bottom Controls -->
-  <div class="bottom-controls" id="bottom-controls">
-    <button class="control-btn off" id="mic-btn" title="Microphone">
-      <img src="../assets/icons/mic-off.svg" alt="Mic">
-    </button>
-    <button class="control-btn off" id="camera-btn" title="Camera">
-      <img src="../assets/icons/camera-off.svg" alt="Camera">
-    </button>
-    <button class="control-btn" id="share-btn" title="Share Screen">
-      <img src="../assets/icons/screen.svg" alt="Share">
-    </button>
-    <button class="control-btn leave-btn" id="leave-btn" title="Leave">
-      <img src="../assets/icons/leave.svg" alt="Leave">
-    </button>
-  </div>
-
-  <!-- Microphone Permission Modal -->
-  <div class="permission-modal" id="mic-permission-modal">
-    <div class="permission-modal-content">
-      <div class="permission-modal-icon">
-        <img src="../assets/icons/mic.svg" alt="Microphone" style="width: 64px; height: 64px; filter: invert(1);">
+  <!-- Name Entry Modal for Anonymous Users -->
+  <div class="name-modal" id="name-modal">
+    <div class="name-modal-content">
+      <div class="name-modal-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="8" r="4" stroke="white" stroke-width="2"/>
+          <path d="M4 20C4 16.6863 7.13401 14 11 14H13C16.866 14 20 16.6863 20 20" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
       </div>
-      <h2>Microphone Permission Required</h2>
-      <p>This site needs access to your microphone to enable voice communication in the meeting.</p>
-      <div class="permission-modal-buttons">
-        <button class="permission-btn allow-btn" id="allow-mic-btn">Allow Microphone</button>
-        <button class="permission-btn cancel-btn" id="deny-mic-btn">Not Now</button>
-      </div>
-      <p class="permission-note">You can enable your microphone later using the button in the bottom controls.</p>
+      <h2>What's your name?</h2>
+      <p>Please enter your name to join the meeting</p>
+      <input type="text" class="name-input" id="name-input" placeholder="Enter your name" maxlength="50" autocomplete="off">
+      <button class="name-submit-btn" id="name-submit-btn">Join Meeting</button>
     </div>
   </div>
 

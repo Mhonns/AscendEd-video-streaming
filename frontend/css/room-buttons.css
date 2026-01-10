@@ -40,8 +40,8 @@
 
 /* Copy Button */
 .copy-btn {
-  width: 24px;
-  height: 24px;
+  width: clamp(18px, 1.8vmin + 8px, 24px);
+  height: clamp(18px, 1.8vmin + 8px, 24px);
   border: none;
   background: transparent !important;
   color: rgba(255, 255, 255, 0.7);
@@ -66,8 +66,8 @@
 }
 
 .copy-icon {
-  width: 14px;
-  height: 14px;
+  width: clamp(10px, 1vmin + 5px, 14px);
+  height: clamp(10px, 1vmin + 5px, 14px);
   filter: invert(1);
   opacity: 0.7;
   transition: opacity 0.2s ease;
@@ -79,9 +79,10 @@
 
 /* Icon Buttons (Top Controls) */
 .icon-btn {
-  width: 45px;
-  height: 45px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  --icon-btn-size: clamp(32px, 3.5vmin + 10px, 45px);
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  border: clamp(1.5px, 0.2vmin, 2px) solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   cursor: pointer;
@@ -91,6 +92,7 @@
   justify-content: center;
   padding: 0;
   position: relative;
+  aspect-ratio: 1 / 1;
 }
 
 .icon-btn:hover {
@@ -104,20 +106,20 @@
 }
 
 .icon-btn img {
-  width: 20px;
-  height: 20px;
+  width: clamp(14px, 1.5vmin + 6px, 20px);
+  height: clamp(14px, 1.5vmin + 6px, 20px);
   filter: invert(1);
 }
 
 .icon-badge {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 10px;
-  height: 10px;
+  top: clamp(1px, 0.2vmin, 2px);
+  left: clamp(1px, 0.2vmin, 2px);
+  width: clamp(7px, 0.8vmin + 3px, 10px);
+  height: clamp(7px, 0.8vmin + 3px, 10px);
   background: #ff3b30;
   border-radius: 50%;
-  border: 2px solid rgba(0, 0, 0, 0.8);
+  border: clamp(1.5px, 0.15vmin, 2px) solid rgba(0, 0, 0, 0.8);
   display: none; /* Hidden for now */
 }
 
@@ -143,9 +145,10 @@
 
 /* Control Buttons (Bottom Controls) */
 .control-btn {
-  width: 55px;
-  height: 55px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  --control-btn-size: clamp(42px, 4.5vmin + 12px, 55px);
+  width: var(--control-btn-size);
+  height: var(--control-btn-size);
+  border: clamp(1.5px, 0.2vmin, 2px) solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   cursor: pointer;
@@ -154,6 +157,7 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  aspect-ratio: 1 / 1;
 }
 
 .control-btn:hover {
@@ -162,8 +166,8 @@
 }
 
 .control-btn img {
-  width: 24px;
-  height: 24px;
+  width: clamp(16px, 1.8vmin + 7px, 24px);
+  height: clamp(16px, 1.8vmin + 7px, 24px);
   filter: invert(1);
 }
 
@@ -211,90 +215,18 @@
   transform: scale(0.95);
 }
 
-/* Responsive Button Styles */
+/* Responsive Button Styles - clamp() handles most scaling automatically */
+/* These media queries handle layout adjustments only */
 @media (max-width: 768px) {
-  .copy-btn {
-    width: 20px;
-    height: 20px;
-  }
-
-  .copy-icon {
-    width: 12px;
-    height: 12px;
-  }
-
-  .icon-btn {
-    width: 38px;
-    height: 38px;
-  }
-
-  .icon-btn img {
-    width: 18px;
-    height: 18px;
-  }
-
-  .control-btn {
-    width: 48px;
-    height: 48px;
-  }
-
-  .control-btn img {
-    width: 20px;
-    height: 20px;
+  .permission-btn {
+    padding: clamp(8px, 1.5vh, 12px) clamp(20px, 3vw, 32px);
+    font-size: clamp(14px, 1.2vmin + 8px, 16px);
   }
 }
 
 @media (max-width: 480px) {
-  .copy-btn {
-    width: 18px;
-    height: 18px;
-  }
-
-  .copy-icon {
-    width: 11px;
-    height: 11px;
-  }
-
-  .icon-btn {
-    width: 35px;
-    height: 35px;
-  }
-
-  .icon-btn img {
-    width: 16px;
-    height: 16px;
-  }
-
-  .control-btn {
-    width: 45px;
-    height: 45px;
-  }
-
-  .control-btn img {
-    width: 18px;
-    height: 18px;
-  }
-}
-
-@media (max-width: 360px) {
-  .icon-btn {
-    width: 32px;
-    height: 32px;
-  }
-
-  .icon-btn img {
-    width: 14px;
-    height: 14px;
-  }
-
-  .control-btn {
-    width: 42px;
-    height: 42px;
-  }
-
-  .control-btn img {
-    width: 16px;
-    height: 16px;
+  .permission-btn {
+    padding: clamp(6px, 1.2vh, 10px) clamp(16px, 2.5vw, 24px);
   }
 }
 

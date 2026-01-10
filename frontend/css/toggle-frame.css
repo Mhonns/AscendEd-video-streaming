@@ -13,7 +13,13 @@
   overflow: hidden;
   pointer-events: none;
   opacity: 1;
-  transition: opacity 0.3s ease, width 0.3s ease;
+  transition: opacity 0.3s ease, width 0.3s ease, top 0.3s ease, bottom 0.3s ease;
+}
+
+/* When UI is hidden (unpinned), move sidebar to top */
+body.ui-hidden .users-sidebar {
+  top: 0;
+  bottom: 0;
 }
 
 .users-sidebar.hidden {
@@ -96,8 +102,14 @@
   flex-direction: column;
   transform: translateX(100%);
   opacity: 0;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: transform 0.3s ease, opacity 0.3s ease, top 0.3s ease, bottom 0.3s ease;
   pointer-events: none;
+}
+
+/* When UI is hidden (unpinned), move chat sidebar to top */
+body.ui-hidden .chat-sidebar {
+  top: 0;
+  bottom: 0;
 }
 
 .chat-sidebar.visible {

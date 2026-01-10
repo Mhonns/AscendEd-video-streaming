@@ -16,6 +16,29 @@ body.show-cursor {
   cursor: default;
 }
 
+/* Room Wrapper - Covers top nav, video container, and bottom nav */
+.room-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* Ensure wrapper works on all screen sizes */
+@supports (height: 100svh) {
+  .room-wrapper {
+    height: 100svh; /* Small viewport height fallback */
+  }
+}
+
 /* Permission Modal */
 .permission-modal {
   position: fixed;
@@ -94,89 +117,99 @@ body.show-cursor {
 
 /* Top Bar */
 .top-bar {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
+  width: 100%;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
-  padding: 20px 30px;
+  padding: clamp(10px, 2vh, 20px) clamp(15px, 2.5vw, 30px);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: clamp(8px, 1.5vmin, 15px);
   z-index: 100;
   opacity: 0;
   transform: translateY(-100%);
   transition: all 0.3s ease;
+  pointer-events: none;
 }
 
 .top-bar.show {
+  position: relative;
   opacity: 1;
   transform: translateY(0);
+  flex-shrink: 0;
+  pointer-events: auto;
 }
 
 .room-info {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(6px, 0.8vmin, 12px);
+  flex-shrink: 1;
+  flex-wrap: wrap;
 }
 
 .room-name {
-  font-size: 16px;
+  font-size: clamp(12px, 1.5vmin + 0.8vw, 20px);
   font-weight: 600;
   color: white;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.room-id-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.room-divider {
+  font-size: clamp(12px, 1.5vmin + 0.8vw, 20px);
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 300;
+  flex-shrink: 0;
 }
 
 .room-id {
-  font-size: 12px;
+  font-size: clamp(10px, 1vmin + 0.5vw, 14px);
   color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-
 
 .user-count {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-left: 20px;
+  gap: clamp(4px, 0.5vmin, 6px);
+  margin-left: clamp(10px, 1.5vmin, 20px);
+  flex-shrink: 0;
 }
 
 .people-icon {
-  width: 16px;
-  height: 16px;
+  width: clamp(12px, 1.2vmin + 4px, 16px);
+  height: clamp(12px, 1.2vmin + 4px, 16px);
   filter: invert(1);
   opacity: 0.8;
 }
 
 .user-count span {
-  font-size: 14px;
+  font-size: clamp(11px, 1vmin + 6px, 14px);
   color: rgba(255, 255, 255, 0.8);
   font-weight: 500;
 }
 
 .top-controls {
   display: flex;
-  gap: 10px;
+  gap: clamp(6px, 0.8vmin, 10px);
+  flex-shrink: 0;
 }
 
 /* Video Container */
 .video-container {
-  position: fixed;
-  top: 85px;
-  left: 0;
-  right: 0;
-  bottom: 95px;
+  position: relative;
+  flex: 1 1 auto;
   width: 100%;
-  height: calc(100vh - 85px - 95px);
+  min-height: 0; /* Important for flex children to allow shrinking */
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 0;
-  transition: padding-right 0.3s ease;
   z-index: 1;
 }
 
@@ -186,7 +219,6 @@ body.show-cursor {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 20px;
-  padding: 20px;
   align-content: start;
 }
 
@@ -196,7 +228,6 @@ body.show-cursor {
   left: 0;
   width: 100%;
   height: 100%;
-  min-height: calc(100vh - 85px - 95px);
   background: #000;
   display: flex;
   justify-content: center;
@@ -254,196 +285,191 @@ body.show-cursor {
 
 /* Bottom Controls */
 .bottom-controls {
-  position: fixed;
+  position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
+  width: 100%;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
-  padding: 25px 30px;
+  padding: clamp(12px, 2.5vh, 25px) clamp(15px, 2.5vw, 30px);
   display: flex;
   justify-content: center;
-  gap: 20px;
+  align-items: center;
+  gap: clamp(10px, 1.5vmin + 5px, 20px);
   z-index: 100;
   opacity: 0;
   transform: translateY(100%);
   transition: all 0.3s ease;
+  pointer-events: none;
 }
 
 .bottom-controls.show {
+  position: relative;
   opacity: 1;
   transform: translateY(0);
+  flex-shrink: 0;
+  pointer-events: auto;
 }
 
-/* Responsive Styles */
-@media (max-width: 1024px) {
-  .video-container {
-    padding-right: 260px;
-  }
-}
-
+/* Responsive Styles - clamp() handles most scaling automatically */
+/* These media queries handle layout adjustments only */
 @media (max-width: 768px) {
   .top-bar {
-    padding: 12px 15px;
     flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .room-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .room-name {
-    font-size: 14px;
-  }
-
-  .room-id {
-    font-size: 11px;
-  }
-
-  .room-id-container {
-    gap: 6px;
-  }
-
-  .user-count {
-    margin-left: 10px;
-    gap: 4px;
-  }
-
-  .people-icon {
-    width: 14px;
-    height: 14px;
-  }
-
-  .user-count span {
-    font-size: 12px;
   }
 
   .top-controls {
-    gap: 8px;
     flex-wrap: wrap;
   }
 
-  .video-container {
-    top: 70px;
-    bottom: 85px;
-    height: calc(100vh - 70px - 85px);
-  }
-
   .video-grid {
-    padding: 15px;
-    gap: 15px;
-  }
-
-  .video-placeholder {
-    min-height: calc(100vh - 70px - 85px);
-  }
-
-  .bottom-controls {
-    padding: 15px 20px;
-    gap: 12px;
-  }
-
-  .placeholder-text {
-    font-size: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   }
 }
 
 @media (max-width: 480px) {
+  .video-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  /* Stack controls if needed on very small screens */
   .top-bar {
-    padding: 10px 12px;
-  }
-
-  .room-name {
-    font-size: 13px;
-  }
-
-  .room-id {
-    font-size: 10px;
-  }
-
-  .room-id-container {
-    gap: 4px;
-  }
-
-  .user-count {
-    margin-left: 8px;
-  }
-
-  .people-icon {
-    width: 12px;
-    height: 12px;
-  }
-
-  .user-count span {
-    font-size: 11px;
+    flex-wrap: wrap;
   }
 
   .top-controls {
-    gap: 6px;
-  }
-
-  .video-container {
-    top: 60px;
-    bottom: 90px;
-    height: calc(100vh - 60px - 90px);
-  }
-
-  .video-grid {
-    padding: 10px;
-    gap: 12px;
-  }
-
-  .video-placeholder {
-    min-height: calc(100vh - 60px - 90px);
-  }
-
-  .bottom-controls {
-    padding: 12px 15px;
-    gap: 10px;
-  }
-
-  .placeholder-text {
-    font-size: 14px;
+    justify-content: flex-end;
   }
 }
 
 @media (max-width: 360px) {
-  .top-bar {
-    padding: 8px 10px;
+  .video-grid {
+    grid-template-columns: 1fr;
   }
+}
 
-  .room-name {
-    font-size: 12px;
-  }
+/* Name Entry Modal */
+.name-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
 
-  .room-id {
-    font-size: 9px;
-  }
+.name-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
 
-  .icon-btn {
-    width: 32px;
-    height: 32px;
-  }
+.name-modal-content {
+  background: linear-gradient(145deg, rgba(35, 35, 40, 0.98), rgba(25, 25, 30, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 48px 40px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 
+    0 25px 80px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  transform: scale(0.9) translateY(20px);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 
-  .icon-btn img {
-    width: 14px;
-    height: 14px;
-  }
+.name-modal.show .name-modal-content {
+  transform: scale(1) translateY(0);
+}
 
-  .bottom-controls {
-    padding: 10px 12px;
-    gap: 8px;
-  }
+.name-modal-icon {
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 
-  .control-btn {
-    width: 42px;
-    height: 42px;
-  }
+.name-modal-icon svg {
+  opacity: 0.9;
+}
 
-  .control-btn img {
-    width: 16px;
-    height: 16px;
-  }
+.name-modal-content h2 {
+  color: white;
+  font-size: 26px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+
+.name-modal-content p {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 28px;
+}
+
+.name-input {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 16px;
+  font-weight: 500;
+  color: white;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.25s ease;
+  margin-bottom: 20px;
+}
+
+.name-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+}
+
+.name-input:focus {
+  border-color: rgba(99, 179, 237, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 4px rgba(99, 179, 237, 0.15);
+}
+
+.name-submit-btn {
+  width: 100%;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #4a9eff 0%, #3d7dd8 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 15px rgba(74, 158, 255, 0.3);
+}
+
+.name-submit-btn:hover {
+  background: linear-gradient(135deg, #5da8ff 0%, #4a8de8 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 158, 255, 0.4);
+}
+
+.name-submit-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(74, 158, 255, 0.3);
+}
+
+.name-submit-btn:disabled {
+  background: rgba(255, 255, 255, 0.15);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
