@@ -8,6 +8,7 @@ let chatVisible = false;
 let chatSocket = null;
 let chatUserId = null;
 let chatRoomId = null;
+let unreadCount = 0;
 
 // DOM elements
 let chatBtn = null;
@@ -16,6 +17,7 @@ let chatCloseBtn = null;
 let chatMessages = null;
 let chatInput = null;
 let chatSendBtn = null;
+let chatCountBadge = null;
 
 // Initialize chat module
 function initChat(socket, userId, roomId) {
@@ -29,6 +31,7 @@ function initChat(socket, userId, roomId) {
   chatMessages = document.getElementById('chat-messages');
   chatInput = document.getElementById('chat-input');
   chatSendBtn = document.getElementById('chat-send-btn');
+  chatCountBadge = document.getElementById('chat-count-badge');
   
   if (!chatBtn || !chatSidebar || !chatMessages || !chatInput || !chatSendBtn) {
     console.warn('Chat elements not found');
@@ -62,6 +65,12 @@ function initChat(socket, userId, roomId) {
         message: data.message,
         timestamp: new Date(data.timestamp)
       });
+      
+      // Increment unread count if chat is not visible and message is from someone else
+      const currentUserId = localStorage.getItem('userId') || chatUserId;
+      if (!chatVisible && data.userId !== currentUserId) {
+        incrementUnreadCount();
+      }
     });
 
     // Listen for chat errors
@@ -96,12 +105,38 @@ function toggleChat() {
     document.body.classList.add('chat-visible');
     // Focus on input when chat opens
     setTimeout(() => chatInput.focus(), 100);
+    // Reset unread count when chat is opened
+    resetUnreadCount();
     console.log('Chat opened');
   } else {
     chatSidebar.classList.remove('visible');
     chatBtn.classList.remove('active');
     document.body.classList.remove('chat-visible');
     console.log('Chat closed');
+  }
+}
+
+// Increment unread message count
+function incrementUnreadCount() {
+  unreadCount++;
+  updateUnreadBadge();
+}
+
+// Reset unread message count
+function resetUnreadCount() {
+  unreadCount = 0;
+  updateUnreadBadge();
+}
+
+// Update the unread badge display
+function updateUnreadBadge() {
+  if (!chatCountBadge) return;
+  
+  if (unreadCount > 0) {
+    chatCountBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+    chatCountBadge.classList.add('show');
+  } else {
+    chatCountBadge.classList.remove('show');
   }
 }
 
@@ -277,6 +312,9 @@ window.ChatModule = {
   init: initChat,
   updateConnection: updateChatConnection,
   addMessage: addChatMessage,
-  loadChatHistory: loadChatHistory
+  loadChatHistory: loadChatHistory,
+  incrementUnreadCount,
+  resetUnreadCount,
+  getUnreadCount: () => unreadCount
 };
 

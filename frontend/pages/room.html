@@ -6,7 +6,8 @@
   <title>Video Conference Room</title>
   <link rel="stylesheet" href="../css/room.css">
   <link rel="stylesheet" href="../css/room-buttons.css">
-  <link rel="stylesheet" href="../css/toggle-frame.css">
+  <link rel="stylesheet" href="../css/people.css">
+  <link rel="stylesheet" href="../css/chat.css">
 </head>
 <body>
   <!-- Main Room Wrapper -->
@@ -21,21 +22,17 @@
           <img src="../assets/icons/copy.svg" alt="Copy" class="copy-icon">
         </button>
       </div>
-      <div class="user-count">
-        <img src="../assets/icons/people.svg" alt="People" class="people-icon">
-        <span id="user-count-number">0</span>
-      </div>
       <div class="top-controls">
         <button class="icon-btn" id="recording-btn" title="Stop Recording">
           <img src="../assets/icons/recording-off.svg" alt="Recording">
         </button>
         <button class="icon-btn" id="people-btn" title="Participants">
           <img src="../assets/icons/people.svg" alt="People">
-          <span class="icon-badge"></span>
+          <span class="user-count-badge" id="user-count-number">0</span>
         </button>
         <button class="icon-btn" id="chat-btn" title="Chat">
           <img src="../assets/icons/chat.svg" alt="Chat">
-          <span class="icon-badge"></span>
+          <span class="chat-count-badge" id="chat-count-badge">0</span>
         </button>
         <button class="icon-btn" id="toggle-ui-btn" title="Toggle Auto-Hide">
           <img src="../assets/icons/pin.svg" alt="Pin">

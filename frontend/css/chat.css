@@ -1,91 +1,4 @@
-/* Toggle Frame Styles - People and Chat */
-
-/* Users Sidebar */
-.users-sidebar {
-  position: fixed;
-  top: 85px;
-  right: 0;
-  width: 280px;
-  bottom: 95px;
-  background: transparent;
-  border: none;
-  z-index: 50;
-  overflow: hidden;
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity 0.3s ease, width 0.3s ease, top 0.3s ease, bottom 0.3s ease;
-}
-
-/* When UI is hidden (unpinned), move sidebar to top */
-body.ui-hidden .users-sidebar {
-  top: 0;
-  bottom: 0;
-}
-
-.users-sidebar.hidden {
-  opacity: 0;
-  width: 0;
-  pointer-events: none;
-}
-
-.users-list {
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: auto;
-  background: transparent;
-  border: none;
-}
-
-.users-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.users-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.users-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.users-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.user-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px;
-  background: transparent;
-  border: none;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  flex-shrink: 0;
-}
-
-.user-name {
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* Chat Sidebar Styles */
 
 /* Chat Sidebar */
 .chat-sidebar {
@@ -258,17 +171,8 @@ body.chat-visible .video-container {
   padding-right: 350px;
 }
 
-/* Adjust users sidebar when chat is visible */
-body.chat-visible .users-sidebar {
-  right: 350px;
-}
-
-/* Responsive Frame Styles */
+/* Responsive Chat Styles */
 @media (max-width: 1024px) {
-  .users-sidebar {
-    width: 240px;
-  }
-
   .chat-sidebar {
     width: 300px;
   }
@@ -276,19 +180,9 @@ body.chat-visible .users-sidebar {
   body.chat-visible .video-container {
     padding-right: 300px;
   }
-
-  body.chat-visible .users-sidebar {
-    right: 300px;
-  }
 }
 
 @media (max-width: 768px) {
-  .users-sidebar {
-    width: 200px;
-    top: 70px;
-    bottom: 85px;
-  }
-
   .chat-sidebar {
     width: 280px;
     top: 70px;
@@ -299,10 +193,6 @@ body.chat-visible .users-sidebar {
     padding-right: 280px;
   }
 
-  body.chat-visible .users-sidebar {
-    right: 280px;
-  }
-
   .chat-message-text {
     max-width: 75%;
   }
@@ -310,38 +200,9 @@ body.chat-visible .users-sidebar {
   .chat-message.own-message .chat-message-text {
     max-width: 75%;
   }
-
-  .user-avatar {
-    width: 35px;
-    height: 35px;
-  }
-
-  .user-name {
-    font-size: 13px;
-  }
 }
 
 @media (max-width: 480px) {
-  .users-sidebar {
-    width: 0;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .users-sidebar:not(.hidden) {
-    width: 30vw;
-    opacity: 1;
-    pointer-events: auto;
-    top: calc(50% - 30vh);
-    height: 30vh;
-    bottom: auto;
-    left: auto;
-    right: 0;
-    border: none;
-    border-radius: 0;
-    z-index: 201;
-  }
-
   .chat-sidebar {
     width: 100%;
     height: 50vh;
@@ -358,14 +219,6 @@ body.chat-visible .users-sidebar {
   body.chat-visible .video-container {
     padding-right: 0;
     padding-bottom: calc(50vh + 70px);
-  }
-
-  body.chat-visible .users-sidebar {
-    right: 0;
-  }
-
-  body.chat-visible .users-sidebar:not(.hidden) {
-    right: 0;
   }
 
   body.chat-visible .users-sidebar:not(.hidden) ~ .chat-sidebar {
@@ -386,15 +239,6 @@ body.chat-visible .users-sidebar {
 
   .chat-message.own-message .chat-message-text {
     max-width: 85%;
-  }
-
-  .user-avatar {
-    width: 30px;
-    height: 30px;
-  }
-
-  .user-name {
-    font-size: 12px;
   }
 }
 

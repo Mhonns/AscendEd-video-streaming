@@ -1,0 +1,323 @@
+/* People/Users Sidebar Styles */
+
+/* Users Sidebar */
+.users-sidebar {
+  position: fixed;
+  top: 85px;
+  right: 0;
+  width: 280px;
+  bottom: 95px;
+  background: transparent;
+  border: none;
+  z-index: 50;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease, width 0.3s ease, top 0.3s ease, bottom 0.3s ease;
+}
+
+/* When UI is hidden (unpinned), move sidebar to top */
+body.ui-hidden .users-sidebar {
+  top: 0;
+  bottom: 0;
+}
+
+.users-sidebar.hidden {
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
+}
+
+.users-list {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+  background: transparent;
+  border: none;
+}
+
+.users-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.users-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.users-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.users-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(30, 30, 35, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.user-item:hover {
+  background: rgba(45, 45, 52, 0.98);
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateX(-4px);
+}
+
+.user-item.active {
+  background: rgba(50, 50, 58, 0.98);
+  border-color: rgba(99, 179, 237, 0.4);
+}
+
+/* User Actions Panel */
+.user-actions {
+  display: none;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.user-item.active .user-actions {
+  display: flex;
+}
+
+.user-action-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.user-action-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.08);
+}
+
+.user-action-btn.mute-btn:hover {
+  background: rgba(255, 193, 7, 0.3);
+}
+
+.user-action-btn.kick-btn:hover {
+  background: rgba(244, 67, 54, 0.3);
+}
+
+.user-action-btn.pin-btn:hover {
+  background: rgba(76, 175, 80, 0.3);
+}
+
+.user-action-btn.pin-btn.pinned {
+  background: rgba(76, 175, 80, 0.4);
+}
+
+.user-action-btn img {
+  width: 16px;
+  height: 16px;
+  filter: invert(1) opacity(0.85);
+}
+
+.user-action-btn.kick-btn img {
+  filter: invert(48%) sepia(79%) saturate(2476%) hue-rotate(338deg) brightness(95%) contrast(95%);
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.user-name {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Adjust users sidebar when chat is visible */
+body.chat-visible .users-sidebar {
+  right: 350px;
+}
+
+/* Responsive People Styles */
+@media (max-width: 1024px) {
+  .users-sidebar {
+    width: 240px;
+  }
+
+  body.chat-visible .users-sidebar {
+    right: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .users-sidebar {
+    width: 200px;
+    top: 70px;
+    bottom: 85px;
+  }
+
+  body.chat-visible .users-sidebar {
+    right: 280px;
+  }
+
+  .user-item {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .user-item:hover {
+    transform: translateX(-2px);
+  }
+
+  .user-avatar {
+    width: 35px;
+    height: 35px;
+  }
+
+  .user-name {
+    font-size: 13px;
+  }
+
+  .user-action-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .user-action-btn img {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .users-sidebar {
+    width: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .users-sidebar:not(.hidden) {
+    width: 55vw;
+    max-width: 220px;
+    opacity: 1;
+    pointer-events: auto;
+    top: 80px;
+    bottom: 100px;
+    height: auto;
+    left: auto;
+    right: 0;
+    border: none;
+    border-radius: 16px 0 0 16px;
+    z-index: 201;
+    background: rgba(20, 20, 25, 0.95);
+    backdrop-filter: blur(10px);
+  }
+
+  body.chat-visible .users-sidebar {
+    right: 0;
+  }
+
+  body.chat-visible .users-sidebar:not(.hidden) {
+    right: 0;
+  }
+
+  .users-list {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  /* User item stacks content when active on mobile */
+  .user-item {
+    flex-wrap: wrap;
+    padding: 10px;
+    gap: 8px;
+    border-radius: 10px;
+  }
+
+  .user-item:hover {
+    transform: none;
+  }
+
+  .user-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .user-name {
+    font-size: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Actions appear on left side below avatar/name on mobile */
+  .user-actions {
+    width: 100%;
+    order: 3;
+    margin-left: 0;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .user-action-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .user-action-btn img {
+    width: 15px;
+    height: 15px;
+  }
+
+  /* Touch-friendly: no hover transform on mobile */
+  .user-action-btn:hover {
+    transform: none;
+  }
+
+  .user-action-btn:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .user-action-btn.mute-btn:active {
+    background: rgba(255, 193, 7, 0.4);
+  }
+
+  .user-action-btn.pin-btn:active {
+    background: rgba(76, 175, 80, 0.4);
+  }
+
+  .user-action-btn.kick-btn:active {
+    background: rgba(244, 67, 54, 0.4);
+  }
+}
+
