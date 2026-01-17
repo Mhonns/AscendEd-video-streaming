@@ -61,20 +61,6 @@ async function initSocket(roomId, userData) {
     if (data.chatHistory && Array.isArray(data.chatHistory) && window.ChatModule) {
       window.ChatModule.loadChatHistory(data.chatHistory);
     }
-    
-    // Initialize WebRTC signaling connection when room is joined
-    if (window.WebRTCModule && typeof window.WebRTCModule.initWebRTCSignaling === 'function') {
-      try {
-        // Pre-initialize WebRTC signaling connection (without requesting media)
-        console.log('Initializing WebRTC signaling connection...');
-        await window.WebRTCModule.initWebRTCSignaling();
-        console.log('WebRTC signaling initialized successfully');
-      } catch (error) {
-        console.error('Error initializing WebRTC:', error);
-      }
-    } else {
-      console.warn('WebRTC module not available yet');
-    }
   });
 
   socket.on('room-error', (data) => {

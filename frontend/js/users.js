@@ -134,10 +134,7 @@ function handleMuteUser(userId) {
 function handlePinUser(userId, btnElement) {
   console.log('Pin user:', userId);
   btnElement.classList.toggle('pinned');
-  // Emit pin event or handle locally
-  if (window.WebRTCModule?.pinUser) {
-    window.WebRTCModule.pinUser(userId);
-  }
+  // TODO: Implement pin functionality
 }
 
 function handleKickUser(userId) {

@@ -393,43 +393,6 @@ function handleUserLeave(socket, roomId, userId) {
   }
 }
 
-// Sync room with signaling server
-function syncRoomWithSignalingServer(roomId, meetingName, hostId) {
-  const signalingHost = process.env.SIGNALING_SERVER_HOST || 'streaming.nathadon.com';
-  const signalingPort = process.env.SIGNALING_SERVER_PORT || 10443;
-  const useHttps = process.env.SIGNALING_SERVER_HTTPS !== 'false';
-  
-  const data = JSON.stringify({
-    roomId: roomId,
-    meetingName: meetingName,
-    hostId: hostId
-  });
-  
-  const options = {
-    hostname: signalingHost,
-    port: signalingPort,
-    path: '/api/rooms/sync',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': data.length
-    },
-    rejectUnauthorized: false // Allow self-signed certs in dev
-  };
-  
-  const client = useHttps ? https : require('http');
-  const req = client.request(options, (res) => {
-    // Response handled (ignore errors)
-  });
-  
-  req.on('error', (error) => {
-    // Silently fail - signaling server sync is optional
-  });
-  
-  req.write(data);
-  req.end();
-}
-
 const PORT = process.env.PORT || 8443;
 server.listen(PORT, () => {
   const protocol = sslOptions ? 'https' : 'http';

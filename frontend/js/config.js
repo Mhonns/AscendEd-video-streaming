@@ -19,20 +19,6 @@ const ServerConfig = {
     protocol: 'https' // Can be 'http' for local dev without SSL
   },
   
-  // Signaling server (Socket.io/WebRTC) configuration
-  signaling: {
-    primary: {
-      host: 'streaming.nathadon.com',
-      port: 30000,
-      protocol: 'https'
-    },
-    fallback: {
-      host: 'localhost',
-      port: 30000,
-      protocol: 'https'
-    }
-  },
-  
   // Auto-detect protocol based on current page
   autoDetectProtocol: true,
   
@@ -124,28 +110,6 @@ function resetServerURL() {
   cachedAPIURL = null;
 }
 
-/**
- * Get the signaling server URL (for Socket.io connections)
- */
-let cachedSignalingURL = null;
-
-async function getSignalingServerURL() {
-  if (cachedSignalingURL) {
-    return cachedSignalingURL;
-  }
-  
-  // For signaling server, use primary if protocol matches, otherwise fallback
-  const protocol = getCurrentProtocol();
-  const primaryURL = buildServerURL(ServerConfig.signaling.primary);
-  const fallbackURL = buildServerURL(ServerConfig.signaling.fallback);
-  
-  // Use primary if it matches current protocol, otherwise fallback
-  cachedSignalingURL = (ServerConfig.signaling.primary.protocol === protocol) ? primaryURL : fallbackURL;
-  console.log('Signaling server URL:', cachedSignalingURL);
-  
-  return cachedSignalingURL;
-}
-
 // Export configuration and functions
 if (typeof module !== 'undefined' && module.exports) {
   // Node.js/CommonJS
@@ -154,7 +118,6 @@ if (typeof module !== 'undefined' && module.exports) {
     determineServerURL,
     getServerURL,
     getAPIURL,
-    getSignalingServerURL,
     resetServerURL,
     buildServerURL,
     getCurrentProtocol
@@ -165,7 +128,6 @@ if (typeof module !== 'undefined' && module.exports) {
   window.determineServerURL = determineServerURL;
   window.getServerURL = getServerURL;
   window.getAPIURL = getAPIURL;
-  window.getSignalingServerURL = getSignalingServerURL;
   window.resetServerURL = resetServerURL;
 }
 

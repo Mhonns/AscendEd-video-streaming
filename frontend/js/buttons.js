@@ -29,20 +29,13 @@ function initMicrophoneButton() {
   const micIcon = micBtn ? micBtn.querySelector('img') : null;
 
   if (micBtn && micIcon) {
-    micBtn.addEventListener('click', async function() {
-      if (!isMicOn) {
-        // Request microphone permission and initialize WebRTC
-        const success = await window.WebRTCModule?.requestMicrophonePermission();
-        if (success) {
-          isMicOn = true;
-          this.classList.remove('off');
-          micIcon.src = '../assets/icons/mic.svg';
-          console.log('Microphone enabled');
-        }
+    micBtn.addEventListener('click', function() {
+      isMicOn = !isMicOn;
+      if (isMicOn) {
+        this.classList.remove('off');
+        micIcon.src = '../assets/icons/mic.svg';
+        console.log('Microphone enabled');
       } else {
-        // Toggle microphone off
-        window.WebRTCModule?.toggleMicrophone(false);
-        isMicOn = false;
         this.classList.add('off');
         micIcon.src = '../assets/icons/mic-off.svg';
         console.log('Microphone disabled');
@@ -57,20 +50,13 @@ function initCameraButton() {
   const cameraIcon = cameraBtn ? cameraBtn.querySelector('img') : null;
 
   if (cameraBtn && cameraIcon) {
-    cameraBtn.addEventListener('click', async function() {
-      if (!isCameraOn) {
-        // Request camera permission and initialize WebRTC
-        const success = await window.WebRTCModule?.requestCameraPermission();
-        if (success) {
-          isCameraOn = true;
-          this.classList.remove('off');
-          cameraIcon.src = '../assets/icons/camera.svg';
-          console.log('Camera enabled');
-        }
+    cameraBtn.addEventListener('click', function() {
+      isCameraOn = !isCameraOn;
+      if (isCameraOn) {
+        this.classList.remove('off');
+        cameraIcon.src = '../assets/icons/camera.svg';
+        console.log('Camera enabled');
       } else {
-        // Toggle camera off
-        window.WebRTCModule?.toggleCamera(false);
-        isCameraOn = false;
         this.classList.add('off');
         cameraIcon.src = '../assets/icons/camera-off.svg';
         console.log('Camera disabled');
@@ -289,4 +275,3 @@ window.ButtonsModule = {
   setMicState: (state) => { isMicOn = state; },
   setCameraState: (state) => { isCameraOn = state; }
 };
-
