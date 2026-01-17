@@ -114,10 +114,27 @@ function initShareButton() {
   });
 }
 
+// Check if device is mobile
+function isMobileDevice() {
+  return window.innerWidth <= 480;
+}
+
 // Show/hide participants
 function initPeopleButton() {
   const peopleBtn = document.getElementById('people-btn');
   if (!peopleBtn) return;
+  
+  // Hide people list by default on mobile
+  if (isMobileDevice()) {
+    peopleListVisible = false;
+    if (usersSidebar) {
+      usersSidebar.classList.add('hidden');
+    }
+  } else {
+    // Show by default on desktop
+    peopleListVisible = true;
+    peopleBtn.classList.add('active');
+  }
   
   peopleBtn.addEventListener('click', function() {
     peopleListVisible = !peopleListVisible;
@@ -136,9 +153,6 @@ function initPeopleButton() {
       console.log('Participants list hidden');
     }
   });
-  
-  // Set people button to active by default
-  peopleBtn.classList.add('active');
 }
 
 // Toggle auto-hide
