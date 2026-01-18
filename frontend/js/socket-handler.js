@@ -36,7 +36,7 @@ async function initSocket(roomId, userData) {
   socket = io(getServerURL());
 
   socket.on('connect', () => {
-    console.log('Connected to server');
+    console.log('[SocketHandler] Connected to server');
     // Join the room
     socket.emit('join-room', {
       roomId: roomId,
@@ -45,33 +45,44 @@ async function initSocket(roomId, userData) {
   });
 
   socket.on('room-joined', async (data) => {
-    console.log('Successfully joined room:', data);
+    console.log('[SocketHandler] Successfully joined room:', data);
     document.querySelector('.room-name').textContent = data.roomName;
     
     // Display all users in sidebar and update count
     if (data.users && Array.isArray(data.users)) {
-      console.log(`Received ${data.users.length} users from server:`, data.users);
+      console.log(`[SocketHandler] Received ${data.users.length} users from server:`, data.users);
       window.UsersModule.displayUsers(data.users);
       window.UsersModule.updateUserCount(data.users.length);
     } else {
-      console.warn('No users data received or invalid format:', data);
+      console.warn('[SocketHandler] No users data received or invalid format:', data);
     }
     
     // Load chat history if available
     if (data.chatHistory && Array.isArray(data.chatHistory) && window.ChatModule) {
       window.ChatModule.loadChatHistory(data.chatHistory);
     }
+
+    // Initialize WebRTC connection to SFU
+    if (window.WebRTCModule) {
+      try {
+        console.log('[SocketHandler] Initializing WebRTC connection to SFU...');
+        await window.WebRTCModule.connectToSFU(socket, currentRoomId, userId);
+        console.log('[SocketHandler] WebRTC SFU connection established');
+      } catch (error) {
+        console.error('[SocketHandler] Failed to connect to WebRTC SFU:', error);
+      }
+    }
   });
 
   socket.on('room-error', (data) => {
-    console.error('Room error:', data);
+    console.error('[SocketHandler] Room error:', data);
     alert(`Error: ${data.message}`);
     // Redirect back to landing page if room doesn't exist
     window.location.href = '../';
   });
 
   socket.on('user-joined', (data) => {
-    console.log('User joined:', data);
+    console.log('[SocketHandler] User joined:', data);
     // Update UI - show all users
     if (data.user) {
       window.UsersModule.addUserToList(data.user);
@@ -80,7 +91,7 @@ async function initSocket(roomId, userData) {
   });
 
   socket.on('user-left', (data) => {
-    console.log('User left:', data);
+    console.log('[SocketHandler] User left:', data);
     if (data.userId) {
       window.UsersModule.removeUserFromList(data.userId);
       window.UsersModule.updateUserCount(window.UsersModule.getUsersList().length);
@@ -88,7 +99,25 @@ async function initSocket(roomId, userData) {
   });
 
   socket.on('disconnect', () => {
-    console.log('Disconnected from server');
+    console.log('[SocketHandler] Disconnected from server');
+  });
+
+  // WebRTC SFU Events
+  // New producer available (another participant started streaming)
+  socket.on('webrtc:new-producer', async (data) => {
+    console.log('[SocketHandler] New producer available:', data);
+    // Will handle consuming this producer in step 2
+    if (window.WebRTCModule && window.WebRTCModule.onNewProducer) {
+      window.WebRTCModule.onNewProducer(data);
+    }
+  });
+
+  // Peer closed their WebRTC connection
+  socket.on('webrtc:peer-closed', (data) => {
+    console.log('Peer WebRTC connection closed:', data);
+    if (window.WebRTCModule && window.WebRTCModule.onPeerClosed) {
+      window.WebRTCModule.onPeerClosed(data);
+    }
   });
   
   // Initialize chat module
@@ -101,6 +130,23 @@ async function initSocket(roomId, userData) {
 
 // Disconnect socket when user leaves the page
 function disconnectOnLeave() {
+  // Disconnect WebRTC first
+  if (window.WebRTCModule) {
+    try {
+      // Notify server about WebRTC disconnect
+      if (socket && socket.connected && currentRoomId && userId) {
+        socket.emit('webrtc:disconnect', {
+          peerId: userId,
+          roomId: currentRoomId
+        });
+      }
+      window.WebRTCModule.disconnect();
+      console.log('WebRTC disconnected');
+    } catch (error) {
+      console.error('Error disconnecting WebRTC:', error);
+    }
+  }
+
   if (socket && socket.connected) {
     // Try to notify server that user is leaving (non-blocking)
     if (currentRoomId && userId) {

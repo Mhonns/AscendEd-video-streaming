@@ -10,7 +10,7 @@ function displayUsers(users) {
   usersList = users || [];
   const usersListElement = document.getElementById('users-list');
   if (!usersListElement) {
-    console.warn('Users list element not found');
+    console.warn('[Users] Users list element not found');
     return;
   }
   
@@ -21,19 +21,19 @@ function displayUsers(users) {
     addUserToList(user);
   });
   
-  console.log(`Displayed ${users.length} users in sidebar`);
+  console.log(`[Users] Displayed ${users.length} users in sidebar`);
 }
 
 function addUserToList(user) {
   if (!user || !user.userId) {
-    console.warn('Invalid user data:', user);
+    console.warn('[Users] Invalid user data:', user);
     return;
   }
   
   // Check if user already exists in the DOM
   const existingItem = document.getElementById(`user-${user.userId}`);
   if (existingItem) {
-    console.log(`User ${user.userId} already in list`);
+    console.log(`[Users] User ${user.userId} already in list`);
     return;
   }
   
@@ -44,7 +44,7 @@ function addUserToList(user) {
   
   const usersListElement = document.getElementById('users-list');
   if (!usersListElement) {
-    console.warn('Users list element not found');
+    console.warn('[Users] Users list element not found');
     return;
   }
   
@@ -119,12 +119,12 @@ function addUserToList(user) {
   userItem.appendChild(actions);
   usersListElement.appendChild(userItem);
   
-  console.log(`Added user to list: ${user.name || 'Anonymous'} (${user.userId})`);
+  console.log(`[Users] Added user to list: ${user.name || 'Anonymous'} (${user.userId})`);
 }
 
 // User action handlers
 function handleMuteUser(userId) {
-  console.log('Mute user:', userId);
+  console.log('[Users] Mute user:', userId);
   const socket = window.SocketHandler?.getSocket();
   if (socket) {
     socket.emit('mute-user', { targetUserId: userId });
@@ -132,14 +132,14 @@ function handleMuteUser(userId) {
 }
 
 function handlePinUser(userId, btnElement) {
-  console.log('Pin user:', userId);
+  console.log('[Users] Pin user:', userId);
   btnElement.classList.toggle('pinned');
   // TODO: Implement pin functionality
 }
 
 function handleKickUser(userId) {
   if (confirm('Are you sure you want to kick this user?')) {
-    console.log('Kick user:', userId);
+    console.log('[Users] Kick user:', userId);
     const socket = window.SocketHandler?.getSocket();
     if (socket) {
       socket.emit('kick-user', { targetUserId: userId });
@@ -161,9 +161,9 @@ function updateUserCount(count) {
   const userCountElement = document.getElementById('user-count-number');
   if (userCountElement) {
     userCountElement.textContent = count;
-    console.log(`Updated user count to: ${count}`);
+    console.log(`[Users] Updated user count to: ${count}`);
   } else {
-    console.warn('User count element not found');
+    console.warn('[Users] User count element not found');
   }
 }
 

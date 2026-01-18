@@ -4,14 +4,14 @@
  */
 
 // Show name modal for anonymous users
-function showNameModal() {
+function showNameModal() {d
   return new Promise((resolve) => {
     const modal = document.getElementById('name-modal');
     const input = document.getElementById('name-input');
     const submitBtn = document.getElementById('name-submit-btn');
     
     if (!modal || !input || !submitBtn) {
-      console.warn('Name modal elements not found');
+      console.warn('[Room] Name modal elements not found');
       resolve(null);
       return;
     }
@@ -40,7 +40,7 @@ function showNameModal() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, name })
-        }).catch(err => console.warn('Could not save name to server:', err));
+        }).catch(err => console.warn('[Room] Could not save name to server:', err));
         
         // Hide modal
         modal.classList.remove('show');

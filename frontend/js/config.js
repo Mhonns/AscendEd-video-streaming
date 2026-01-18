@@ -64,11 +64,11 @@ async function determineServerURL() {
   
   for (const server of servers) {
     const url = buildServerURL(server.config);
-    console.log(`Testing ${server.name} server: ${url}`);
+    console.log(`[Config] Testing ${server.name} server: ${url}`);
     
     cachedServerURL = url;
     cachedAPIURL = `${url}/api`;
-    console.log(`Using ${server.name} server: ${cachedServerURL}`);
+    console.log(`[Config] Using ${server.name} server: ${cachedServerURL}`);
     return cachedServerURL;
   }
   
@@ -76,7 +76,7 @@ async function determineServerURL() {
   const fallbackURL = buildServerURL(ServerConfig.fallback);
   cachedServerURL = fallbackURL;
   cachedAPIURL = `${fallbackURL}/api`;
-  console.warn(`All servers unreachable, using fallback: ${cachedServerURL}`);
+  console.warn(`[Config] All servers unreachable, using fallback: ${cachedServerURL}`);
   return cachedServerURL;
 }
 

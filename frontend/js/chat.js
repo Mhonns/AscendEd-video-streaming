@@ -34,7 +34,7 @@ function initChat(socket, userId, roomId) {
   chatCountBadge = document.getElementById('chat-count-badge');
   
   if (!chatBtn || !chatSidebar || !chatMessages || !chatInput || !chatSendBtn) {
-    console.warn('Chat elements not found');
+    console.warn('[Chat] Chat elements not found');
     return;
   }
   
@@ -75,11 +75,11 @@ function initChat(socket, userId, roomId) {
 
     // Listen for chat errors
     chatSocket.on('chat-error', (data) => {
-      console.error('Chat error:', data.message);
+      console.error('[Chat] Chat error:', data.message);
     });
   }
   
-  console.log('Chat module initialized');
+  console.log('[Chat] Chat module initialized');
 }
 
 // Track displayed message IDs to prevent duplicates
@@ -107,12 +107,12 @@ function toggleChat() {
     setTimeout(() => chatInput.focus(), 100);
     // Reset unread count when chat is opened
     resetUnreadCount();
-    console.log('Chat opened');
+    console.log('[Chat] Chat opened');
   } else {
     chatSidebar.classList.remove('visible');
     chatBtn.classList.remove('active');
     document.body.classList.remove('chat-visible');
-    console.log('Chat closed');
+    console.log('[Chat] Chat closed');
   }
 }
 

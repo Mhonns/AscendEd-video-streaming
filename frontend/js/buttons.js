@@ -29,16 +29,33 @@ function initMicrophoneButton() {
   const micIcon = micBtn ? micBtn.querySelector('img') : null;
 
   if (micBtn && micIcon) {
-    micBtn.addEventListener('click', function() {
-      isMicOn = !isMicOn;
-      if (isMicOn) {
-        this.classList.remove('off');
-        micIcon.src = '../assets/icons/mic.svg';
-        console.log('Microphone enabled');
+    micBtn.addEventListener('click', async function() {
+      if (!isMicOn) {
+        // Request microphone permission and start mic
+        const success = await window.MediaModule?.requestMicrophonePermission();
+        if (success) {
+          isMicOn = true;
+          this.classList.remove('off');
+          micIcon.src = '../assets/icons/mic.svg';
+          
+          // Sync with WebRTC - resume audio producer if exists
+          if (window.WebRTCModule) {
+            window.WebRTCModule.setAudioEnabled(true);
+          }
+          console.log('Microphone turned ON');
+        }
       } else {
+        // Stop microphone completely (releases hardware, turns off indicator)
+        window.MediaModule?.stopMicrophone();
+        isMicOn = false;
         this.classList.add('off');
         micIcon.src = '../assets/icons/mic-off.svg';
-        console.log('Microphone disabled');
+        
+        // Sync with WebRTC - pause audio producer
+        if (window.WebRTCModule) {
+          window.WebRTCModule.setAudioEnabled(false);
+        }
+        console.log('Microphone turned OFF');
       }
     });
   }
@@ -50,16 +67,33 @@ function initCameraButton() {
   const cameraIcon = cameraBtn ? cameraBtn.querySelector('img') : null;
 
   if (cameraBtn && cameraIcon) {
-    cameraBtn.addEventListener('click', function() {
-      isCameraOn = !isCameraOn;
-      if (isCameraOn) {
-        this.classList.remove('off');
-        cameraIcon.src = '../assets/icons/camera.svg';
-        console.log('Camera enabled');
+    cameraBtn.addEventListener('click', async function() {
+      if (!isCameraOn) {
+        // Request camera permission and start camera
+        const success = await window.MediaModule?.requestCameraPermission();
+        if (success) {
+          isCameraOn = true;
+          this.classList.remove('off');
+          cameraIcon.src = '../assets/icons/camera.svg';
+          
+          // Sync with WebRTC - resume video producer if exists
+          if (window.WebRTCModule) {
+            window.WebRTCModule.setVideoEnabled(true);
+          }
+          console.log('Camera turned ON');
+        }
       } else {
+        // Stop camera completely (releases hardware, turns off camera light)
+        window.MediaModule?.stopCamera();
+        isCameraOn = false;
         this.classList.add('off');
         cameraIcon.src = '../assets/icons/camera-off.svg';
-        console.log('Camera disabled');
+        
+        // Sync with WebRTC - pause video producer
+        if (window.WebRTCModule) {
+          window.WebRTCModule.setVideoEnabled(false);
+        }
+        console.log('Camera turned OFF');
       }
     });
   }
@@ -247,6 +281,9 @@ function initLeaveButton() {
   
   leaveBtn.addEventListener('click', function() {
     console.log('Leaving meeting...');
+    
+    // Stop all media streams
+    window.MediaModule?.stopAllMedia();
     
     // Notify server that user is leaving
     const socket = window.SocketHandler.getSocket();
