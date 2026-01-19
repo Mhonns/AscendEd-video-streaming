@@ -4,8 +4,7 @@
  */
 
 const chatModule = require('./chat');
-
-// In-memory room storage (in production, use a database)
+const sfuModule = require('./sfu');
 const rooms = new Map();
 const users = new Map(); // Store user profiles: userId -> { name, profileImage }
 
@@ -59,20 +58,27 @@ function leaveRoom(roomId, userId) {
   const room = rooms.get(roomId);
   if (room) {
     room.participants.delete(userId);
-    // If no participants left, mark room as inactive
+    sfuModule.removeUserStream(roomId, userId);
     if (room.participants.size === 0) {
       room.isActive = false;
-      // Optionally remove the room after a delay
+      chatModule.clearRoomMessages(roomId);
       setTimeout(() => {
         const currentRoom = rooms.get(roomId);
         if (currentRoom && currentRoom.participants.size === 0) {
-          rooms.delete(roomId);
-          // Clear chat messages when room is destroyed
-          chatModule.clearRoomMessages(roomId);
+          destroyRoom(roomId);
         }
-      }, 60000); // Remove after 1 minute of being empty
+      }, 60000);
     }
   }
+}
+
+/**
+ * Destroy a room and clean up all associated resources
+ */
+function destroyRoom(roomId) {
+  chatModule.clearRoomMessages(roomId);
+  sfuModule.destroyRoomStreams(roomId);
+  rooms.delete(roomId);
 }
 
 /**
@@ -122,6 +128,7 @@ module.exports = {
   roomExists,
   joinRoom,
   leaveRoom,
+  destroyRoom,
   getRoomUsers,
   saveUserProfile,
   getUserProfile,

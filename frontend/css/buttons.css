@@ -1,5 +1,13 @@
 /* Button Styles */
 
+/* Global: remove borders from all buttons/submit controls */
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  border: none;
+}
+
 /* Permission Modal Buttons */
 .permission-btn {
   padding: 12px 32px;
@@ -13,12 +21,12 @@
 }
 
 .allow-btn {
-  background: #4CAF50;
+  background: #57c45a;
   color: white;
 }
 
 .allow-btn:hover {
-  background: #45a049;
+  background: #4db552;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
 }
@@ -28,14 +36,13 @@
 }
 
 .cancel-btn {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.14);
   color: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: none;
 }
 
 .cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 /* Copy Button */
@@ -56,13 +63,13 @@
 }
 
 .copy-btn:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
   color: rgba(255, 255, 255, 0.9);
 }
 
 .copy-btn:active {
   transform: scale(0.95);
-  background: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.22) !important;
 }
 
 .copy-icon {
@@ -82,9 +89,9 @@
   --icon-btn-size: clamp(32px, 3.5vmin + 10px, 45px);
   width: var(--icon-btn-size);
   height: var(--icon-btn-size);
-  border: clamp(1.5px, 0.2vmin, 2px) solid rgba(255, 255, 255, 0.3);
+  border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.14);
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -96,13 +103,11 @@
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.26);
 }
 
 .icon-btn.active {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.34);
 }
 
 .icon-btn img {
@@ -173,23 +178,19 @@
 }
 
 #recording-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 #recording-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.26);
 }
 
 #recording-btn.recording {
-  background: rgba(0, 122, 255, 0.3);
-  border-color: rgba(0, 122, 255, 0.6);
+  background: rgba(0, 122, 255, 0.38);
 }
 
 #recording-btn.recording:hover {
-  background: rgba(0, 122, 255, 0.4);
-  border-color: rgba(0, 122, 255, 0.8);
+  background: rgba(0, 122, 255, 0.5);
 }
 
 /* Control Buttons (Bottom Controls) */
@@ -197,9 +198,9 @@
   --control-btn-size: clamp(42px, 4.5vmin + 12px, 55px);
   width: var(--control-btn-size);
   height: var(--control-btn-size);
-  border: clamp(1.5px, 0.2vmin, 2px) solid rgba(255, 255, 255, 0.3);
+  border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.14);
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -210,8 +211,7 @@
 }
 
 .control-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.26);
 }
 
 .control-btn img {
@@ -221,29 +221,27 @@
 }
 
 .control-btn.off {
-  background: rgba(255, 59, 48, 0.2);
-  border-color: rgba(255, 59, 48, 0.5);
+  background: rgba(255, 59, 48, 0.28);
 }
 
 .control-btn.off:hover {
-  background: rgba(255, 59, 48, 0.3);
+  background: rgba(255, 59, 48, 0.38);
 }
 
 .leave-btn {
-  background: rgba(255, 59, 48, 0.2);
-  border-color: rgba(255, 59, 48, 0.5);
+  background: rgba(255, 59, 48, 0.3);
 }
 
 .leave-btn:hover {
-  background: rgba(255, 59, 48, 0.4);
+  background: rgba(255, 59, 48, 0.5);
 }
 
 /* Chat Send Button */
 .chat-send-btn {
   width: 44px;
   height: 44px;
-  border: 1px solid rgba(0, 122, 255, 0.5);
-  background: rgba(0, 122, 255, 0.3);
+  border: none;
+  background: rgba(0, 122, 255, 0.4);
   border-radius: 50%;
   cursor: pointer;
   display: flex;
@@ -255,8 +253,7 @@
 }
 
 .chat-send-btn:hover {
-  background: transparent;
-  border-color: rgba(0, 122, 255, 0.7);
+  background: rgba(0, 122, 255, 0.18);
   transform: scale(1.05);
 }
 

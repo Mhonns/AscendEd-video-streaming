@@ -5,7 +5,7 @@
 
 const roomsModule = require('./rooms');
 const chatModule = require('./chat');
-const webrtcSFU = require('./webrtc-sfu');
+const sfuModule = require('./sfu');
 
 // Track socket connections
 const socketConnections = new Map();
@@ -112,115 +112,12 @@ function initSocketEvents(io) {
     socket.on('chat-message', (data) => {
       handleChatMessage(socket, io, data);
     });
-
-    // WebRTC SFU Events
-    // Get router RTP capabilities for the room
-    socket.on('webrtc:get-router-capabilities', async (data, callback) => {
-      try {
-        const { roomId } = data;
-        const rtpCapabilities = await webrtcSFU.getRouterRtpCapabilities(roomId);
-        callback({ rtpCapabilities });
-      } catch (error) {
-        console.error('Error getting router capabilities:', error);
-        callback({ error: error.message });
-      }
-    });
-
-    // Create WebRTC transport
-    socket.on('webrtc:create-transport', async (data, callback) => {
-      try {
-        const { roomId, peerId, direction } = data;
-        const transportParams = await webrtcSFU.createWebRtcTransport(roomId, peerId, direction);
-        callback(transportParams);
-      } catch (error) {
-        console.error('Error creating transport:', error);
-        callback({ error: error.message });
-      }
-    });
-
-    // Connect transport (DTLS handshake)
-    socket.on('webrtc:connect-transport', async (data, callback) => {
-      try {
-        const { peerId, direction, dtlsParameters } = data;
-        await webrtcSFU.connectTransport(peerId, direction, dtlsParameters);
-        callback({ success: true });
-      } catch (error) {
-        console.error('Error connecting transport:', error);
-        callback({ error: error.message });
-      }
-    });
-
-    // Create producer (publish media)
-    socket.on('webrtc:produce', async (data, callback) => {
-      try {
-        const { roomId, peerId, kind, rtpParameters, appData } = data;
-        const { id: producerId } = await webrtcSFU.createProducer(peerId, kind, rtpParameters, appData);
-        
-        // Notify other participants about new producer
-        socket.to(roomId).emit('webrtc:new-producer', {
-          producerId,
-          peerId,
-          kind
-        });
-        
-        callback({ producerId });
-      } catch (error) {
-        console.error('Error creating producer:', error);
-        callback({ error: error.message });
-      }
-    });
-
-    // Get existing producers in room
-    socket.on('webrtc:get-producers', async (data, callback) => {
-      try {
-        const { roomId, peerId } = data;
-        const producers = webrtcSFU.getRoomProducers(roomId, peerId);
-        callback({ producers });
-      } catch (error) {
-        console.error('Error getting producers:', error);
-        callback({ error: error.message });
-      }
-    });
-
-    // Create consumer (receive media)
-    socket.on('webrtc:consume', async (data, callback) => {
-      try {
-        const { roomId, consumerPeerId, producerId, rtpCapabilities } = data;
-        const consumerParams = await webrtcSFU.createConsumer(
-          roomId,
-          consumerPeerId,
-          producerId,
-          rtpCapabilities
-        );
-        callback(consumerParams);
-      } catch (error) {
-        console.error('Error creating consumer:', error);
-        callback({ error: error.message });
-      }
-    });
-
-    // Resume consumer
-    socket.on('webrtc:resume-consumer', async (data, callback) => {
-      try {
-        const { consumerId } = data;
-        await webrtcSFU.resumeConsumer(consumerId);
-        callback({ success: true });
-      } catch (error) {
-        console.error('Error resuming consumer:', error);
-        callback({ error: error.message });
-      }
-    });
-
-    // Handle WebRTC peer disconnection
-    socket.on('webrtc:disconnect', async (data) => {
-      try {
-        const { peerId, roomId } = data;
-        await webrtcSFU.closePeer(peerId);
-        
-        // Notify other participants
-        socket.to(roomId).emit('webrtc:peer-closed', { peerId });
-      } catch (error) {
-        console.error('Error disconnecting WebRTC peer:', error);
+    
+    // Handle ICE candidate from client
+    socket.on('ice-candidate', async (data) => {
+      const { roomId, userId, candidate, type } = data;
+      if (roomId && userId && candidate) {
+        await sfuModule.addIceCandidate(roomId, userId, candidate, type);
       }
     });
   });

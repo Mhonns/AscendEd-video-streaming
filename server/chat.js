@@ -7,6 +7,9 @@
 // In-memory storage: roomId -> Array of messages (queue)
 const roomMessages = new Map();
 
+// Maximum number of messages to keep per room
+const MAX_MESSAGES_PER_ROOM = 100000;
+
 /**
  * Add a message to a room's chat queue
  * @param {string} roomId - The room ID
@@ -39,8 +42,7 @@ function addMessage(roomId, messageData) {
   // Add to queue (FIFO structure)
   messageQueue.push(message);
 
-  // Optional: Limit queue size to prevent memory issues (keep last 1000 messages per room)
-  const MAX_MESSAGES_PER_ROOM = 1000;
+  // Limit queue size to prevent memory issues (keep last 1000 messages per room)
   if (messageQueue.length > MAX_MESSAGES_PER_ROOM) {
     messageQueue.shift(); // Remove oldest message
   }

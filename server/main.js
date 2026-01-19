@@ -9,11 +9,12 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const PORT = process.env.PORT || 8443;
 
 // Import modules
 const apiRoutes = require('./api');
 const { initSocketEvents } = require('./socket-events');
-const webrtcSFU = require('./webrtc-sfu');
+const { setIo: setSfuIo } = require('./sfu');
 
 const app = express();
 
@@ -69,23 +70,12 @@ app.use('/api', apiRoutes);
 // Initialize Socket.io event handlers
 initSocketEvents(io);
 
-// Start server
-const PORT = process.env.PORT || 8443;
+// Set Socket.io instance for SFU module
+setSfuIo(io);
 
 // Initialize mediasoup workers and start server
 async function startServer() {
   try {
-    // Initialize mediasoup SFU workers
-    const numWorkers = Math.min(4, require('os').cpus().length);
-    await webrtcSFU.initializeWorkers(numWorkers);
-    console.log(`Initialized ${numWorkers} mediasoup worker(s)`);
-    
-    // Set announced IP for WebRTC (use environment variable or auto-detect)
-    const announcedIp = process.env.ANNOUNCED_IP || null;
-    if (announcedIp) {
-      webrtcSFU.setAnnouncedIp(announcedIp);
-    }
-    
     // Start HTTP/HTTPS server
     server.listen(PORT, () => {
       const protocol = sslOptions ? 'https' : 'http';

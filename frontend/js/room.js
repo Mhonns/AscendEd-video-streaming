@@ -4,7 +4,7 @@
  */
 
 // Show name modal for anonymous users
-function showNameModal() {d
+function showNameModal() {
   return new Promise((resolve) => {
     const modal = document.getElementById('name-modal');
     const input = document.getElementById('name-input');

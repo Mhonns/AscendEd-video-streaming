@@ -18,9 +18,21 @@ function showMain() {
 // Initialize server URL on page load
 determineServerURL();
 
+function ensureUserId() {
+  let userId = localStorage.getItem('userId');
+  if (!userId) {
+    userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem('userId', userId);
+  }
+  return userId;
+}
+
 async function startMeeting() {
   // Ensure server URL is determined
   await determineServerURL();
+
+  // Auto-save profile before entering a room (silent / best-effort)
+  await saveUserProfile({ silent: true, requireName: false });
   
   const meetingName = document.getElementById('meeting-name').value || 'Quick Meeting';
   const roomId = generateRoomId();
@@ -54,6 +66,9 @@ async function startMeeting() {
 async function joinMeeting() {
   // Ensure server URL is determined
   await determineServerURL();
+
+  // Auto-save profile before entering a room (silent / best-effort)
+  await saveUserProfile({ silent: true, requireName: false });
   
   const roomCode = document.getElementById('room-code').value.trim().toUpperCase();
   
@@ -135,23 +150,21 @@ function loadUserProfile() {
   }
 }
 
-async function saveUserProfile() {
-  // Ensure server URL is determined
-  await determineServerURL();
-  
-  const userName = document.getElementById('user-name')?.value.trim();
+async function saveUserProfile(options = {}) {
+  const { silent = false, requireName = true } = options;
+
+  const userName = document.getElementById('user-name')?.value.trim() || '';
   const profileImage = document.getElementById('profile-image')?.src;
   
+  // Always ensure we have a userId for the session
+  const userId = ensureUserId();
+
+  // If name is missing, either block (interactive save) or no-op (auto-save)
   if (!userName) {
-    alert('Please enter your name');
+    if (!silent && requireName) {
+      alert('Please enter your name');
+    }
     return;
-  }
-  
-  // Generate or get user ID
-  let userId = localStorage.getItem('userId');
-  if (!userId) {
-    userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('userId', userId);
   }
   
   // Save to localStorage
@@ -162,6 +175,9 @@ async function saveUserProfile() {
   
   // Send to server
   try {
+    // Ensure server URL is determined (only needed for server save)
+    await determineServerURL();
+
     const response = await fetch(`${getAPIURL()}/users/profile`, {
       method: 'POST',
       headers: {
@@ -177,23 +193,18 @@ async function saveUserProfile() {
     
     if (response.ok && data.success) {
       console.log('Profile saved successfully');
-      // Show a brief success indicator
-      const saveBtn = document.querySelector('.save-profile-btn');
-      if (saveBtn) {
-        const originalHTML = saveBtn.innerHTML;
-        saveBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-        saveBtn.style.background = '#4CAF50';
-        setTimeout(() => {
-          saveBtn.innerHTML = originalHTML;
-          saveBtn.style.background = '';
-        }, 1000);
-      }
     } else {
-      alert(`Error saving profile: ${data.error || 'Unknown error'}`);
+      if (!silent) {
+        alert(`Error saving profile: ${data.error || 'Unknown error'}`);
+      } else {
+        console.warn('Error saving profile:', data.error || 'Unknown error');
+      }
     }
   } catch (error) {
     console.error('Error saving profile:', error);
-    alert('Failed to save profile. Please check if the server is running.');
+    if (!silent) {
+      alert('Failed to save profile. Please check if the server is running.');
+    }
   }
 }
 
@@ -231,10 +242,10 @@ document.addEventListener('DOMContentLoaded', function() {
   
   const userNameInput = document.getElementById('user-name');
   if (userNameInput) {
-    userNameInput.addEventListener('blur', saveUserProfile);
+    userNameInput.addEventListener('blur', () => saveUserProfile({ silent: true, requireName: false }));
     userNameInput.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
-        saveUserProfile();
+        saveUserProfile({ silent: true, requireName: false });
         this.blur();
       }
     });

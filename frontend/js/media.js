@@ -101,7 +101,7 @@ function toggleMicrophone(enabled) {
       track.enabled = enabled;
     });
     isMicEnabled = enabled;
-    console.log(`Microphone ${enabled ? 'enabled' : 'disabled'}`);
+    console.log(`[Media] Microphone ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 
@@ -122,7 +122,7 @@ function toggleCamera(enabled) {
       hideLocalVideo();
     }
     
-    console.log(`Camera ${enabled ? 'enabled' : 'disabled'}`);
+    console.log(`[Media] Camera ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
 
@@ -137,7 +137,7 @@ function stopMicrophone() {
       localStream.removeTrack(track);
     });
     isMicEnabled = false;
-    console.log('Microphone stopped and released');
+    console.log('[Media] Microphone stopped and released');
   }
 }
 
@@ -153,7 +153,7 @@ function stopCamera() {
     });
     isCameraEnabled = false;
     hideLocalVideo();
-    console.log('Camera stopped and released');
+    console.log('[Media] Camera stopped and released');
   }
 }
 
@@ -204,6 +204,8 @@ function displayLocalVideo() {
   if (videoElement && localStream) {
     videoElement.srcObject = localStream;
   }
+
+  updateVideoGridLayout();
 }
 
 /**
@@ -217,6 +219,8 @@ function hideLocalVideo() {
   if (localVideoContainer) {
     localVideoContainer.remove();
   }
+
+  updateVideoGridLayout();
   
   // Show placeholder if no other videos
   if (videoGrid && placeholder) {
@@ -225,6 +229,18 @@ function hideLocalVideo() {
       placeholder.classList.remove('hidden');
     }
   }
+}
+
+/**
+ * Toggle layout mode based on number of visible video tiles.
+ * When there's only one tile (typically just local video), fill the whole video area.
+ */
+function updateVideoGridLayout() {
+  const videoGrid = document.getElementById('video-grid');
+  if (!videoGrid) return;
+
+  const tiles = videoGrid.querySelectorAll('.video-item');
+  videoGrid.classList.toggle('single-video', tiles.length === 1);
 }
 
 /**
@@ -239,7 +255,7 @@ function stopAllMedia() {
     isMicEnabled = false;
     isCameraEnabled = false;
     hideLocalVideo();
-    console.log('All media stopped');
+    console.log('[Media] All media stopped');
   }
 }
 
