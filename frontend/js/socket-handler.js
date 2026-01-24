@@ -62,14 +62,12 @@ async function initSocket(roomId, userData) {
       window.ChatModule.loadChatHistory(data.chatHistory);
     }
 
-    // Initialize WebRTC connection to SFU
-    if (window.WebRTCModule) {
+    // SFU: on join, POST to /consumer to consume current streams from other users
+    if (window.SFUConsumeModule && typeof window.SFUConsumeModule.requestConsumeCurrentStreams === 'function') {
       try {
-        console.log('[SocketHandler] Initializing WebRTC connection to SFU...');
-        await window.WebRTCModule.connectToSFU(socket, currentRoomId, userId);
-        console.log('[SocketHandler] WebRTC SFU connection established');
+        await window.SFUConsumeModule.requestConsumeCurrentStreams(currentRoomId, userId);
       } catch (error) {
-        console.error('[SocketHandler] Failed to connect to WebRTC SFU:', error);
+        console.error('[SocketHandler] Failed to request SFU consume on join:', error);
       }
     }
   });
@@ -101,23 +99,34 @@ async function initSocket(roomId, userData) {
   socket.on('disconnect', () => {
     console.log('[SocketHandler] Disconnected from server');
   });
-
-  // WebRTC SFU Events
-  // New producer available (another participant started streaming)
-  socket.on('webrtc:new-producer', async (data) => {
-    console.log('[SocketHandler] New producer available:', data);
-    // Will handle consuming this producer in step 2
-    if (window.WebRTCModule && window.WebRTCModule.onNewProducer) {
-      window.WebRTCModule.onNewProducer(data);
+  
+  // SFU: when a NEW user starts broadcasting for the first time, consume their stream
+  socket.on('new-broadcaster', async (data) => {
+    console.log(`[SocketHandler] New broadcaster event received: ${data.userId} (my userId: ${userId})`);
+    
+    // Don't consume if it's our own broadcast
+    if (data.userId === userId) {
+      console.log('[SocketHandler] Skipping - this is my own broadcast');
+      return;
+    }
+    
+    console.log('[SocketHandler] Will re-consume to get new broadcaster stream...');
+    if (window.SFUConsumeModule && typeof window.SFUConsumeModule.requestConsumeCurrentStreams === 'function') {
+      try {
+        await window.SFUConsumeModule.requestConsumeCurrentStreams(currentRoomId, userId);
+        console.log('[SocketHandler] Successfully consumed streams from new broadcaster');
+      } catch (error) {
+        console.error('[SocketHandler] Failed to consume from new broadcaster:', error);
+      }
+    } else {
+      console.error('[SocketHandler] SFUConsumeModule not available!');
     }
   });
 
-  // Peer closed their WebRTC connection
-  socket.on('webrtc:peer-closed', (data) => {
-    console.log('Peer WebRTC connection closed:', data);
-    if (window.WebRTCModule && window.WebRTCModule.onPeerClosed) {
-      window.WebRTCModule.onPeerClosed(data);
-    }
+  // SFU: user mute status changed (for UI updates, audio continues via WebRTC)
+  socket.on('user-mute-status', (data) => {
+    console.log('[SocketHandler] User mute status:', data);
+    // The actual audio muting happens automatically via WebRTC track.enabled
   });
   
   // Initialize chat module
@@ -130,23 +139,6 @@ async function initSocket(roomId, userData) {
 
 // Disconnect socket when user leaves the page
 function disconnectOnLeave() {
-  // Disconnect WebRTC first
-  if (window.WebRTCModule) {
-    try {
-      // Notify server about WebRTC disconnect
-      if (socket && socket.connected && currentRoomId && userId) {
-        socket.emit('webrtc:disconnect', {
-          peerId: userId,
-          roomId: currentRoomId
-        });
-      }
-      window.WebRTCModule.disconnect();
-      console.log('WebRTC disconnected');
-    } catch (error) {
-      console.error('Error disconnecting WebRTC:', error);
-    }
-  }
-
   if (socket && socket.connected) {
     // Try to notify server that user is leaving (non-blocking)
     if (currentRoomId && userId) {

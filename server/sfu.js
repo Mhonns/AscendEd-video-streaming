@@ -2,6 +2,16 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const webrtc = require("wrtc");
+const fs = require('fs');
+const https = require('https');
+const cors = require('cors');
+
+// Enable CORS for all origins
+app.use(cors());
+
+// SSL Certificate paths
+const SSL_CERT_PATH = '/etc/letsencrypt/live/streaming.nathadon.com/fullchain.pem';
+const SSL_KEY_PATH = '/etc/letsencrypt/live/streaming.nathadon.com/privkey.pem';
 
 // ICE servers configuration with STUN and TURN
 const iceServers = [
@@ -33,6 +43,10 @@ const roomUserStreams = new Map();
 const broadcasterPeers = new Map();
 // Map to track consumer peer connections: roomId -> userId -> peer
 const consumerPeers = new Map();
+// Queue to track pending broadcasts: roomId -> Set of userIds currently broadcasting
+const pendingBroadcasts = new Map();
+// Resolvers waiting for queue to empty: roomId -> array of resolve functions
+const broadcastWaiters = new Map();
 
 // Socket.io instance for real-time notifications
 let io = null;
@@ -47,6 +61,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.post("/consumer", async ({ body }, res) => {    
     const { sdp, roomId, userId } = body;
+    console.log(`[CONSUME] ${userId} -> room ${roomId}`);
+    
+    // Wait for any pending broadcasts to complete first
+    await waitForPendingBroadcasts(roomId);
+    
     const peer = new webrtc.RTCPeerConnection({ iceServers });
     
     // Track consumer peer connection by userId
@@ -79,23 +98,42 @@ app.post("/consumer", async ({ body }, res) => {
     await peer.setRemoteDescription(desc);
 
     const roomStreams = roomUserStreams.get(roomId);
+    const streamCount = roomStreams ? roomStreams.size : 0;
+    const streamUsers = roomStreams ? Array.from(roomStreams.keys()) : [];
+    console.log(`[CONSUME] Room ${roomId} has ${streamCount} stream(s): [${streamUsers.join(', ')}]`);
+    
     if (roomStreams) {
-        roomStreams.forEach((stream, _oderId) => {
-            stream.getTracks().forEach(track => peer.addTrack(track, stream));
+        let tracksAdded = 0;
+        roomStreams.forEach((stream, oderId) => {
+            // Don't send user's own stream back (prevents echo)
+            if (oderId === userId) {
+                console.log(`[CONSUME] Skipping own stream from ${oderId}`);
+                return;
+            }
+            stream.getTracks().forEach(track => {
+                console.log(`[CONSUME] Sending track from ${oderId} to ${userId}: { kind: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState} }`);
+                peer.addTrack(track, stream);
+                tracksAdded++;
+            });
         });
+        console.log(`[CONSUME] Added ${tracksAdded} track(s) for ${userId}`);
+    } else {
+        console.log(`[CONSUME] WARNING: No streams in room ${roomId}`);
     }
 
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
-    const payload = {
-        sdp: peer.localDescription
-    }
 
-    res.json(payload);
+    res.json({ sdp: peer.localDescription });
 });
 
 app.post('/broadcast', async ({ body }, res) => {
     const { sdp, roomId, userId } = body;  
+    console.log(`[BROADCAST] ${userId} -> room ${roomId}`);
+    
+    // Add to pending queue - consumers will wait for this to complete
+    addToPendingBroadcast(roomId, userId);
+    
     const peer = new webrtc.RTCPeerConnection({ iceServers });
     
     // Track broadcaster peer connection
@@ -129,25 +167,102 @@ app.post('/broadcast', async ({ body }, res) => {
     await peer.setRemoteDescription(desc);
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
-    const payload = {
-        sdp: peer.localDescription
-    }
 
-    res.json(payload);
+    res.json({ sdp: peer.localDescription });
 });
+
+app.post('/stop-broadcast', async ({ body }, res) => {
+    const { roomId, userId } = body;
+    console.log(`[STOP-BROADCAST] ${userId} stopped broadcasting in room ${roomId}`);
+    
+    removeUserStream(roomId, userId);
+    
+    res.json({ success: true });
+});
+
+// Mute status notification - no re-broadcast needed, just notify other users
+app.post('/mute-status', async ({ body }, res) => {
+    const { roomId, userId, kind, muted } = body;
+    console.log(`[MUTE-STATUS] ${userId} ${kind} ${muted ? 'muted' : 'unmuted'} in room ${roomId}`);
+    
+    // Notify other users in the room about mute status change
+    if (io) {
+        io.to(roomId).emit('user-mute-status', { roomId, userId, kind, muted });
+    }
+    res.json({ success: true });
+});
+
+// Add user to pending broadcast queue
+function addToPendingBroadcast(roomId, userId) {
+    if (!pendingBroadcasts.has(roomId)) {
+        pendingBroadcasts.set(roomId, new Set());
+    }
+    pendingBroadcasts.get(roomId).add(userId);
+    console.log(`[QUEUE] Added ${userId} to pending broadcasts in room ${roomId}`);
+}
+
+// Remove user from pending broadcast queue and notify waiters
+function removeFromPendingBroadcast(roomId, userId) {
+    const pending = pendingBroadcasts.get(roomId);
+    if (pending) {
+        pending.delete(userId);
+        console.log(`[QUEUE] Removed ${userId} from pending broadcasts in room ${roomId}`);
+        
+        // If queue is empty, resolve all waiters
+        if (pending.size === 0) {
+            const waiters = broadcastWaiters.get(roomId);
+            if (waiters) {
+                waiters.forEach(resolve => resolve());
+                broadcastWaiters.delete(roomId);
+                console.log(`[QUEUE] Room ${roomId} queue empty, notified waiters`);
+            }
+        }
+    }
+}
+
+// Wait for pending broadcasts to complete
+function waitForPendingBroadcasts(roomId) {
+    const pending = pendingBroadcasts.get(roomId);
+    if (!pending || pending.size === 0) {
+        return Promise.resolve(); // Queue already empty
+    }
+    
+    return new Promise(resolve => {
+        if (!broadcastWaiters.has(roomId)) {
+            broadcastWaiters.set(roomId, []);
+        }
+        broadcastWaiters.get(roomId).push(resolve);
+        console.log(`[QUEUE] Consumer waiting for ${pending.size} pending broadcasts in room ${roomId}`);
+    });
+}
 
 function handleTrackEvent(e, roomId, userId) {
     const stream = e.streams[0];
+    const track = e.track;
+    
+    console.log(`[TRACK] Received from ${userId}: { kind: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState} }`);
+    
     if (!roomUserStreams.has(roomId)) {
         roomUserStreams.set(roomId, new Map());
     }
     roomUserStreams.get(roomId).set(userId, stream);
     
+    // Log current streams in room
+    const streamCount = roomUserStreams.get(roomId).size;
+    const streamUsers = Array.from(roomUserStreams.get(roomId).keys());
+    console.log(`[TRACK] Room ${roomId} now has ${streamCount} stream(s): [${streamUsers.join(', ')}]`);
+    
+    // Remove from pending queue - broadcast is complete
+    removeFromPendingBroadcast(roomId, userId);
+    
     // Notify other users in the room about the new broadcaster
     if (io) {
+        const room = io.sockets.adapter.rooms.get(roomId);
+        const socketsInRoom = room ? room.size : 0;
+        console.log(`[TRACK] Emitting 'new-broadcaster' for ${userId} to ${socketsInRoom} socket(s) in room ${roomId}`);
         io.to(roomId).emit('new-broadcaster', { roomId, userId });
     }
-};
+}
 
 function destroyRoomStreams(roomId) {
     if (roomUserStreams.has(roomId)) {
@@ -232,4 +347,13 @@ module.exports = {
     setIo
 };
 
-app.listen(5000, () => console.log('server started'));
+// Read SSL certificates
+const sslOptions = {
+    key: fs.readFileSync(SSL_KEY_PATH),
+    cert: fs.readFileSync(SSL_CERT_PATH)
+};
+
+// Create HTTPS server
+https.createServer(sslOptions, app).listen(5000, () => {
+    console.log('HTTPS server for SFU socket started on port 5000');
+});

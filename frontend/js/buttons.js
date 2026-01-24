@@ -35,26 +35,17 @@ function initMicrophoneButton() {
         const success = await window.MediaModule?.requestMicrophonePermission();
         if (success) {
           isMicOn = true;
+          window.MediaModule?.toggleMicrophone(isMicOn);
           this.classList.remove('off');
           micIcon.src = '../assets/icons/mic.svg';
-          
-          // Sync with WebRTC - resume audio producer if exists
-          if (window.WebRTCModule) {
-            window.WebRTCModule.setAudioEnabled(true);
-          }
           console.log('Microphone turned ON');
         }
       } else {
         // Stop microphone completely (releases hardware, turns off indicator)
-        window.MediaModule?.stopMicrophone();
         isMicOn = false;
+        window.MediaModule?.toggleMicrophone(isMicOn);
         this.classList.add('off');
         micIcon.src = '../assets/icons/mic-off.svg';
-        
-        // Sync with WebRTC - pause audio producer
-        if (window.WebRTCModule) {
-          window.WebRTCModule.setAudioEnabled(false);
-        }
         console.log('Microphone turned OFF');
       }
     });
@@ -75,11 +66,6 @@ function initCameraButton() {
           isCameraOn = true;
           this.classList.remove('off');
           cameraIcon.src = '../assets/icons/camera.svg';
-          
-          // Sync with WebRTC - resume video producer if exists
-          if (window.WebRTCModule) {
-            window.WebRTCModule.setVideoEnabled(true);
-          }
           console.log('Camera turned ON');
         }
       } else {
@@ -88,11 +74,6 @@ function initCameraButton() {
         isCameraOn = false;
         this.classList.add('off');
         cameraIcon.src = '../assets/icons/camera-off.svg';
-        
-        // Sync with WebRTC - pause video producer
-        if (window.WebRTCModule) {
-          window.WebRTCModule.setVideoEnabled(false);
-        }
         console.log('Camera turned OFF');
       }
     });

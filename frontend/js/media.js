@@ -1,3 +1,28 @@
+const serverUrl = `streaming.nathadon.com`;
+const serverPort = 5000;
+const serverProtocol = 'https';
+
+const DEFAULT_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
+];
+
 /**
  * Media Module
  * Handles local media stream (camera/microphone) management
@@ -92,7 +117,8 @@ async function requestCameraPermission() {
 }
 
 /**
-   * Toggle microphone on/off (enable/disable without stopping track)
+ * Toggle microphone on/off (enable/disable without stopping track)
+ * Uses mute notification instead of re-broadcast for smooth audio
  */
 function toggleMicrophone(enabled) {
   if (localStream) {
@@ -102,11 +128,20 @@ function toggleMicrophone(enabled) {
     });
     isMicEnabled = enabled;
     console.log(`[Media] Microphone ${enabled ? 'enabled' : 'disabled'}`);
+    
+    // If not broadcasting yet, start broadcast. Otherwise just notify mute status.
+    if (enabled && !window.SFUBroadcastModule?.isBroadcasting()) {
+      broadcastToSFU();
+    } else {
+      // Just notify mute status - no re-broadcast needed
+      window.SFUBroadcastModule?.notifyMuteStatus('audio', !enabled);
+    }
   }
 }
 
 /**
  * Toggle camera on/off (enable/disable without stopping track)
+ * Uses mute notification instead of re-broadcast for smooth video
  */
 function toggleCamera(enabled) {
   if (localStream) {
@@ -118,8 +153,16 @@ function toggleCamera(enabled) {
     
     if (enabled) {
       displayLocalVideo();
+      // If not broadcasting yet, start broadcast. Otherwise just notify mute status.
+      if (!window.SFUBroadcastModule?.isBroadcasting()) {
+        broadcastToSFU();
+      } else {
+        window.SFUBroadcastModule?.notifyMuteStatus('video', false);
+      }
     } else {
       hideLocalVideo();
+      // Just notify mute status - no re-broadcast needed
+      window.SFUBroadcastModule?.notifyMuteStatus('video', true);
     }
     
     console.log(`[Media] Camera ${enabled ? 'enabled' : 'disabled'}`);
@@ -278,6 +321,23 @@ function getMicEnabled() {
  */
 function getCameraEnabled() {
   return isCameraEnabled;
+}
+
+/**
+ * Broadcast local stream to SFU
+ */
+function broadcastToSFU() {
+  
+  if (!localStream) return;
+  if (!window.SFUBroadcastModule) return;
+  
+  const roomId = window.SocketHandler?.getCurrentRoomId();
+  const userId = window.SocketHandler?.getUserId();
+  
+  if (!roomId || !userId) return;
+  
+  window.SFUBroadcastModule.broadcastStream(localStream, roomId, userId)
+    .catch(err => console.error('[Media] Broadcast failed:', err));
 }
 
 // Export module

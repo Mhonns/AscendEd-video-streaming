@@ -61,11 +61,14 @@ body.ui-hidden .users-sidebar {
 
 .user-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 14px;
+  min-height: 130px;
   background: rgba(30, 30, 35, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -74,21 +77,19 @@ body.ui-hidden .users-sidebar {
 
 .user-item:hover {
   background: rgba(45, 45, 52, 0.98);
-  border-color: rgba(255, 255, 255, 0.18);
   transform: translateX(-4px);
 }
 
 .user-item.active {
   background: rgba(50, 50, 58, 0.98);
-  border-color: rgba(99, 179, 237, 0.4);
 }
 
 /* User Actions Panel */
 .user-actions {
   display: none;
   gap: 6px;
-  margin-left: auto;
   flex-shrink: 0;
+  justify-content: center;
 }
 
 .user-item.active .user-actions {
@@ -141,11 +142,11 @@ body.ui-hidden .users-sidebar {
 }
 
 .user-avatar {
-  width: 40px;
-  height: 40px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: none;
   flex-shrink: 0;
 }
 
@@ -153,10 +154,11 @@ body.ui-hidden .users-sidebar {
   color: white;
   font-size: 14px;
   font-weight: 500;
-  flex: 1;
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 /* Adjust users sidebar when chat is visible */
@@ -187,8 +189,9 @@ body.chat-visible .users-sidebar {
   }
 
   .user-item {
-    padding: 10px 12px;
-    gap: 10px;
+    padding: 16px 12px;
+    gap: 12px;
+    min-height: 110px;
   }
 
   .user-item:hover {
@@ -196,8 +199,8 @@ body.chat-visible .users-sidebar {
   }
 
   .user-avatar {
-    width: 35px;
-    height: 35px;
+    width: 50px;
+    height: 50px;
   }
 
   .user-name {
@@ -235,8 +238,8 @@ body.chat-visible .users-sidebar {
     border: none;
     border-radius: 16px 0 0 16px;
     z-index: 201;
-    background: rgba(20, 20, 25, 0.95);
-    backdrop-filter: blur(10px);
+    background: transparent;
+    backdrop-filter: none;
   }
 
   body.chat-visible .users-sidebar {
@@ -254,10 +257,10 @@ body.chat-visible .users-sidebar {
 
   /* User item stacks content when active on mobile */
   .user-item {
-    flex-wrap: wrap;
-    padding: 10px;
+    padding: 14px 10px;
     gap: 8px;
     border-radius: 10px;
+    min-height: 90px;
   }
 
   .user-item:hover {
@@ -265,25 +268,21 @@ body.chat-visible .users-sidebar {
   }
 
   .user-avatar {
-    width: 30px;
-    height: 30px;
+    width: 44px;
+    height: 44px;
   }
 
   .user-name {
     font-size: 12px;
-    flex: 1;
     min-width: 0;
   }
 
-  /* Actions appear on left side below avatar/name on mobile */
+  /* Actions appear below avatar/name on mobile */
   .user-actions {
     width: 100%;
-    order: 3;
-    margin-left: 0;
     margin-top: 6px;
     padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    justify-content: flex-start;
+    justify-content: center;
     gap: 8px;
   }
 

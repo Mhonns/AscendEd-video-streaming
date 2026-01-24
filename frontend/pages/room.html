@@ -115,28 +115,19 @@
       <button class="name-submit-btn" id="name-submit-btn">Join Meeting</button>
     </div>
   </div>
-
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   
-  <!-- Load mediasoup-client as ES module and expose globally -->
-  <script type="module">
-    import * as mediasoupClient from 'https://esm.sh/mediasoup-client@3';
-    window.mediasoupClient = mediasoupClient;
-    window.mediasoupClientLoaded = true;
-    console.log('[WebRTC] [mediasoup-client] Loaded successfully');
-    // Dispatch event to signal loading complete
-    window.dispatchEvent(new Event('mediasoup-ready'));
-  </script>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 
   <script src="../js/config.js"></script>
   <script src="../js/room-utils.js"></script>
   <script src="../js/ui-controls.js"></script>
   <script src="../js/users.js"></script>
-  <script src="../js/socket-handler.js"></script>
   <script src="../js/media.js"></script>
+  <script src="../js/sfu-consume.js"></script>
+  <script src="../js/sfu-broadcast.js"></script>
+  <script src="../js/socket-handler.js"></script>
   <script src="../js/buttons.js"></script>
   <script src="../js/chat.js"></script>
-  <script src="../js/webrtc.js"></script>
   <script src="../js/room.js"></script>
 </body>
 </html>
