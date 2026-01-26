@@ -115,9 +115,9 @@ function initSocketEvents(io) {
     
     // Handle ICE candidate from client
     socket.on('ice-candidate', async (data) => {
-      const { roomId, userId, candidate, type } = data;
+      const { roomId, userId, candidate, type, streamKey } = data;
       if (roomId && userId && candidate) {
-        await sfuModule.addIceCandidate(roomId, userId, candidate, type);
+        await sfuModule.addIceCandidate(roomId, userId, candidate, type, streamKey);
       }
     });
   });
@@ -135,6 +135,9 @@ function handleUserLeave(socket, roomId, userId) {
     
     roomsModule.leaveRoom(roomId, userId);
     socket.leave(roomId);
+    
+    // Clean up all SFU streams for this user
+    sfuModule.removeUserStreams(roomId, userId);
     
     console.log(` ${userName} (${userId}) left room "${room.name}" (${roomId})`);
     console.log(`  Room now has ${room.participants.size} participant(s)`);

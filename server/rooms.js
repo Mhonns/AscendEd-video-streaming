@@ -58,7 +58,7 @@ function leaveRoom(roomId, userId) {
   const room = rooms.get(roomId);
   if (room) {
     room.participants.delete(userId);
-    sfuModule.removeUserStream(roomId, userId);
+    sfuModule.removeUserStreams(roomId, userId);
     if (room.participants.size === 0) {
       room.isActive = false;
       chatModule.clearRoomMessages(roomId);

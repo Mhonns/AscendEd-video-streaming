@@ -64,8 +64,8 @@ body.ui-hidden .users-sidebar {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 20px 14px;
+  gap: 0;
+  padding: 0;
   min-height: 130px;
   background: rgba(30, 30, 35, 0.95);
   border: none;
@@ -73,6 +73,7 @@ body.ui-hidden .users-sidebar {
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  overflow: hidden;
 }
 
 .user-item:hover {
@@ -88,8 +89,12 @@ body.ui-hidden .users-sidebar {
 .user-actions {
   display: none;
   gap: 6px;
-  flex-shrink: 0;
   justify-content: center;
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
 }
 
 .user-item.active .user-actions {
@@ -151,11 +156,13 @@ body.ui-hidden .users-sidebar {
 }
 
 .user-media {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 120px;
+  height: 100%;
   border-radius: 12px;
   overflow: hidden;
-  flex-shrink: 0;
   background: rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
@@ -170,14 +177,21 @@ body.ui-hidden .users-sidebar {
 }
 
 .user-name {
+  position: absolute;
+  top: 8px;
+  left: 8px;
   color: white;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
-  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  max-width: calc(100% - 16px);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 4px 8px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  z-index: 2;
 }
 
 /* Adjust users sidebar when chat is visible */
@@ -208,8 +222,6 @@ body.chat-visible .users-sidebar {
   }
 
   .user-item {
-    padding: 16px 12px;
-    gap: 12px;
     min-height: 110px;
   }
 
@@ -222,12 +234,9 @@ body.chat-visible .users-sidebar {
     height: 50px;
   }
 
-  .user-media {
-    height: 100px;
-  }
-
   .user-name {
-    font-size: 13px;
+    font-size: 11px;
+    padding: 3px 6px;
   }
 
   .user-action-btn {
@@ -280,8 +289,6 @@ body.chat-visible .users-sidebar {
 
   /* User item stacks content when active on mobile */
   .user-item {
-    padding: 14px 10px;
-    gap: 8px;
     border-radius: 10px;
     min-height: 90px;
   }
@@ -296,17 +303,16 @@ body.chat-visible .users-sidebar {
   }
 
   .user-name {
-    font-size: 12px;
-    min-width: 0;
+    font-size: 10px;
+    padding: 3px 6px;
+    top: 6px;
+    left: 6px;
   }
 
-  /* Actions appear below avatar/name on mobile */
+  /* Actions centered at bottom on mobile */
   .user-actions {
-    width: 100%;
-    margin-top: 6px;
-    padding-top: 8px;
-    justify-content: center;
-    gap: 8px;
+    bottom: 6px;
+    gap: 6px;
   }
 
   .user-action-btn {

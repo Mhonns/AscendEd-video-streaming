@@ -66,6 +66,8 @@ function initCameraButton() {
         const success = await window.MediaModule?.requestCameraPermission();
         if (success) {
           isCameraOn = true;
+          // Toggle camera to broadcast to SFU
+          window.MediaModule?.toggleCamera(isCameraOn);
           this.classList.remove('off');
           cameraIcon.src = '../assets/icons/camera.svg';
           window.UsersModule?.setVideoOn?.(localStorage.getItem('userId'), true);
