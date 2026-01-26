@@ -110,6 +110,9 @@ async function initSocket(roomId, userData) {
       return;
     }
     
+    // Store the broadcaster's userId for label display
+    window.SFUConsumeModule?.setBroadcasterUserId?.(data.userId);
+    
     console.log('[SocketHandler] Will re-consume to get new broadcaster stream...');
     if (window.SFUConsumeModule && typeof window.SFUConsumeModule.requestConsumeCurrentStreams === 'function') {
       try {

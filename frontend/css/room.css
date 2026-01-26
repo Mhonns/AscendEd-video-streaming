@@ -117,14 +117,9 @@ body.show-cursor {
 
 /* Top Bar */
 .top-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   width: 100%;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
-  padding: clamp(10px, 2vh, 20px) clamp(15px, 2.5vw, 30px);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -132,16 +127,20 @@ body.show-cursor {
   z-index: 100;
   opacity: 0;
   transform: translateY(-100%);
-  transition: all 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease, max-height 0.3s ease, padding 0.3s ease;
   pointer-events: none;
+  overflow: hidden;
+  max-height: 0;
+  padding: 0;
 }
 
 .top-bar.show {
-  position: relative;
   opacity: 1;
   transform: translateY(0);
   flex-shrink: 0;
   pointer-events: auto;
+  max-height: 160px; /* allow wrap on small screens */
+  padding: clamp(10px, 2vh, 20px) clamp(15px, 2.5vw, 30px);
 }
 
 .room-info {
@@ -184,17 +183,18 @@ body.show-cursor {
 /* Video Container */
 .video-container {
   position: relative;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   width: 100%;
-  min-height: 0; /* Important for flex children to allow shrinking */
-  overflow-y: auto;
-  overflow-x: hidden;
+  height: 0; /* Start at 0, flex-grow will expand it */
+  min-height: 0;
+  overflow: hidden;
   z-index: 1;
 }
 
 .video-grid {
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
@@ -202,27 +202,53 @@ body.show-cursor {
   align-content: start;
 }
 
-/* Single video mode: make the local video fill the available space (between top/bottom nav) */
+/* Single video mode: fill exactly the video-container height */
 .video-grid.single-video {
-  grid-template-columns: 1fr;
-  grid-auto-rows: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0;
   padding: 0;
-  align-content: stretch;
 }
 
 .video-grid.single-video .video-item {
-  height: 100%;
+  flex: 1 1 0;
+  height: 0; /* Start at 0, flex-grow expands to fill */
   min-height: 0;
   aspect-ratio: auto;
   border-radius: 0;
   border: none;
+  overflow: hidden;
+  position: relative;
 }
 
 .video-grid.single-video .video-item video {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Single video mode + screenshare: never crop the shared screen.
+   Letterbox/pillarbox with black bars when aspect ratios don't match. */
+.video-grid.single-video .video-item.screenshare video {
+  object-fit: contain;
+  background: #000;
+}
+
+/* Single video mode + remote: same fit as screenshare */
+.video-grid.single-video .video-item.remote video {
+  object-fit: contain;
+  background: #000;
+}
+
+/* Main video container */
+#main-video-container {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
 }
 
 .video-placeholder {
@@ -277,6 +303,44 @@ body.show-cursor {
 
 .video-item.local video {
   transform: scaleX(-1); /* Mirror local video */
+}
+
+.video-item.screenshare video {
+  transform: none; /* Do not mirror screen share */
+  object-fit: contain; /* Fit the whole screen into the frame (no crop) */
+}
+
+/* Remote video: same fit as screenshare (no crop, black letterbox/pillarbox), but behind */
+.video-item.remote {
+  z-index: 0;
+  background: #000;
+}
+
+.video-item.remote video {
+  object-fit: contain;
+  background: #000;
+}
+
+/* Main video (local screen share) sits on top */
+#main-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1; /* Above remote-video */
+}
+
+/* Remote video sits behind main-video */
+#remote-video {
+  object-fit: contain;
+  background: #000;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0; /* Behind the main-video (screen share) */
 }
 
 .video-label {
@@ -336,14 +400,10 @@ body.show-cursor {
 
 /* Bottom Controls */
 .bottom-controls {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   width: 100%;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
-  padding: clamp(12px, 2.5vh, 25px) clamp(15px, 2.5vw, 30px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -351,16 +411,20 @@ body.show-cursor {
   z-index: 100;
   opacity: 0;
   transform: translateY(100%);
-  transition: all 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease, max-height 0.3s ease, padding 0.3s ease;
   pointer-events: none;
+  overflow: hidden;
+  max-height: 0;
+  padding: 0;
 }
 
 .bottom-controls.show {
-  position: relative;
   opacity: 1;
   transform: translateY(0);
   flex-shrink: 0;
   pointer-events: auto;
+  max-height: 140px; /* allow wrap on small screens */
+  padding: clamp(12px, 2.5vh, 25px) clamp(15px, 2.5vw, 30px);
 }
 
 /* Responsive Styles - clamp() handles most scaling automatically */

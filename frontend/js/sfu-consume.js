@@ -5,6 +5,8 @@
  */
 // Store consumer peer for cleanup
 let consumerPeer = null;
+// Store the current broadcaster's userId for label display
+let currentBroadcasterUserId = null;
 
 async function postJson(url, body) {
   const res = await fetch(url, {
@@ -108,41 +110,91 @@ function playRemoteAudio(stream) {
 }
 
 /**
- * Display remote video stream
+ * Get the broadcaster's display name from UsersModule
+ */
+function getBroadcasterName() {
+  if (!currentBroadcasterUserId) return 'Remote';
+  
+  const users = window.UsersModule?.getUsersList?.() || [];
+  const broadcaster = users.find(u => u.userId === currentBroadcasterUserId);
+  return broadcaster?.name || 'Remote';
+}
+
+/**
+ * Set the current broadcaster's userId (called from socket-handler on new-broadcaster)
+ */
+function setBroadcasterUserId(userId) {
+  currentBroadcasterUserId = userId;
+  // Update the label if container already exists
+  updateRemoteVideoLabel();
+}
+
+/**
+ * Update the remote video label with the broadcaster's name
+ */
+function updateRemoteVideoLabel() {
+  const container = document.getElementById('main-video-container');
+  if (!container) return;
+  
+  const label = container.querySelector('.video-label');
+  if (label && container.classList.contains('remote') && !container.classList.contains('screenshare')) {
+    label.textContent = getBroadcasterName();
+  }
+}
+
+/**
+ * Display remote video stream inside main-video-container
  */
 function displayRemoteVideo(stream) {
   const videoGrid = document.getElementById('video-grid');
+  const placeholder = document.getElementById('video-placeholder');
   if (!videoGrid) return;
-  
-  let remoteContainer = document.getElementById('remote-video-container');
-  if (!remoteContainer) {
-    remoteContainer = document.createElement('div');
-    remoteContainer.id = 'remote-video-container';
-    remoteContainer.className = 'video-item remote';
-    
-    const videoEl = document.createElement('video');
+
+  if (placeholder) {
+    placeholder.classList.add('hidden');
+  }
+
+  // Use the shared main-video-container (same as screen share)
+  let container = document.getElementById('main-video-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'main-video-container';
+    container.className = 'video-item remote';
+
+    const label = document.createElement('div');
+    label.className = 'video-label';
+    label.textContent = getBroadcasterName();
+
+    container.appendChild(label);
+    videoGrid.appendChild(container);
+  }
+
+  // Add remote class if not already present
+  container.classList.add('remote');
+
+  // Update label with broadcaster's name
+  updateRemoteVideoLabel();
+
+  // Create or get the remote-video element inside the container
+  let videoEl = document.getElementById('remote-video');
+  if (!videoEl) {
+    videoEl = document.createElement('video');
     videoEl.id = 'remote-video';
     videoEl.autoplay = true;
     videoEl.playsInline = true;
-    
-    const label = document.createElement('div');
-    label.className = 'video-label';
-    label.textContent = 'Remote';
-    
-    remoteContainer.appendChild(videoEl);
-    remoteContainer.appendChild(label);
-    videoGrid.appendChild(remoteContainer);
+    // Insert before the label
+    const label = container.querySelector('.video-label');
+    container.insertBefore(videoEl, label);
   }
-  
-  const videoEl = document.getElementById('remote-video');
-  if (videoEl) {
-    videoEl.srcObject = stream;
-  }
+
+  videoEl.srcObject = stream;
   console.log('[SFUConsumeModule] Displaying remote video');
 }
 
 window.SFUConsumeModule = {
-  requestConsumeCurrentStreams
+  requestConsumeCurrentStreams,
+  setBroadcasterUserId,
+  updateRemoteVideoLabel
 };
 
 

@@ -3,72 +3,124 @@
  * Handles user list display and management
  */
 
-let usersList = [];
+// Per-user state for this client (priority is local/client-side)
+const userStateById = new Map(); // userId -> { userId, name, profileImage, priority, pinned, screenShareOn, videoOn, audioOn }
+let selectedUserId = null; // user selected in people frame (overrides "top priority" for main video)
 
-function displayUsers(users) {
-  // Display all users (including anonymous)
-  usersList = users || [];
-  const usersListElement = document.getElementById('users-list');
-  if (!usersListElement) {
-    console.warn('[Users] Users list element not found');
-    return;
-  }
-  
-  usersListElement.innerHTML = '';
-  
-  // Display all users
-  users.forEach(user => {
-    addUserToList(user);
-  });
-  
-  console.log(`[Users] Displayed ${users.length} users in sidebar`);
+function getLocalUserId() {
+  return localStorage.getItem('userId') || null;
 }
 
-function addUserToList(user) {
-  if (!user || !user.userId) {
-    console.warn('[Users] Invalid user data:', user);
+function ensureLocalUserInState() {
+  const userId = getLocalUserId();
+  if (!userId) return;
+
+  const name = localStorage.getItem('userName') || 'You';
+  const profileImage = localStorage.getItem('profileImage') || '../assets/icons/people.svg';
+
+  const existing = userStateById.get(userId);
+  if (existing) {
+    existing.name = existing.name || name;
+    existing.profileImage = existing.profileImage || profileImage;
     return;
   }
-  
-  // Check if user already exists in the DOM
-  const existingItem = document.getElementById(`user-${user.userId}`);
-  if (existingItem) {
-    console.log(`[Users] User ${user.userId} already in list`);
-    return;
-  }
-  
-  // Add to usersList if not already there
-  if (!usersList.find(u => u.userId === user.userId)) {
-    usersList.push(user);
-  }
-  
-  const usersListElement = document.getElementById('users-list');
-  if (!usersListElement) {
-    console.warn('[Users] Users list element not found');
-    return;
-  }
-  
+
+  userStateById.set(userId, {
+    userId,
+    name,
+    profileImage,
+    priority: 0,
+    pinned: false,
+    screenShareOn: false,
+    videoOn: false,
+    audioOn: false
+  });
+}
+
+function getUsersSorted() {
+  return Array.from(userStateById.values()).sort((a, b) => {
+    const pa = Number.isFinite(a.priority) ? a.priority : 0;
+    const pb = Number.isFinite(b.priority) ? b.priority : 0;
+    if (pb !== pa) return pb - pa;
+    const an = (a.name || '').toLowerCase();
+    const bn = (b.name || '').toLowerCase();
+    return an.localeCompare(bn);
+  });
+}
+
+function getTopPriorityUserId() {
+  const sorted = getUsersSorted();
+  return sorted.length ? sorted[0].userId : null;
+}
+
+function getPrimaryVideoUserId() {
+  return selectedUserId || getTopPriorityUserId() || getLocalUserId();
+}
+
+function getPriority(userId) {
+  const u = userStateById.get(userId);
+  return u && Number.isFinite(u.priority) ? u.priority : 0;
+}
+
+function setUserItemActive(userId, active) {
+  const el = document.getElementById(`user-${userId}`);
+  if (!el) return;
+  el.classList.toggle('active', !!active);
+}
+
+function createUserItemElement(user) {
   const userItem = document.createElement('div');
   userItem.className = 'user-item';
   userItem.id = `user-${user.userId}`;
   userItem.dataset.userId = user.userId;
-  
+  userItem.dataset.priority = String(user.priority || 0);
+
+  // Avatar (will be hidden when local camera is on)
   const avatar = document.createElement('img');
   avatar.className = 'user-avatar';
   avatar.src = user.profileImage || '../assets/icons/people.svg';
   avatar.alt = user.name || 'User';
-  avatar.onerror = function() {
+  avatar.onerror = function () {
     this.src = '../assets/icons/people.svg';
   };
-  
+
+  // For local user: show live camera preview in the avatar slot when camera is enabled
+  const isLocalUser = user.userId === getLocalUserId();
+  const localStream = isLocalUser ? window.MediaModule?.getLocalStream?.() : null;
+  const localVideoTrack = localStream && localStream.getVideoTracks ? localStream.getVideoTracks()[0] : null;
+  const shouldShowCameraPreview = !!(isLocalUser && localVideoTrack && localVideoTrack.enabled);
+
+  const mediaWrap = document.createElement('div');
+  mediaWrap.className = 'user-media';
+
+  if (shouldShowCameraPreview) {
+    avatar.style.display = 'none';
+
+    const videoPreview = document.createElement('video');
+    videoPreview.className = 'user-video-preview';
+    videoPreview.autoplay = true;
+    videoPreview.muted = true;
+    videoPreview.playsInline = true;
+    videoPreview.srcObject = localStream;
+
+    // Best-effort play (can fail without gesture in some browsers)
+    setTimeout(() => {
+      videoPreview.play?.().catch?.(() => {});
+    }, 0);
+
+    mediaWrap.appendChild(videoPreview);
+  }
+
+  mediaWrap.appendChild(avatar);
+
   const name = document.createElement('div');
   name.className = 'user-name';
   name.textContent = user.name || 'Anonymous';
-  
+
   // Create action buttons container
   const actions = document.createElement('div');
   actions.className = 'user-actions';
-  
+
   // Mute button
   const muteBtn = document.createElement('button');
   muteBtn.className = 'user-action-btn mute-btn';
@@ -78,17 +130,18 @@ function addUserToList(user) {
     e.stopPropagation();
     handleMuteUser(user.userId);
   };
-  
-  // Pin button
+
+  // Pin button (affects local priority ordering only)
   const pinBtn = document.createElement('button');
   pinBtn.className = 'user-action-btn pin-btn';
   pinBtn.title = 'Pin User';
   pinBtn.innerHTML = `<img src="../assets/icons/pin.svg" alt="Pin">`;
+  if (user.pinned) pinBtn.classList.add('pinned');
   pinBtn.onclick = (e) => {
     e.stopPropagation();
     handlePinUser(user.userId, pinBtn);
   };
-  
+
   // Kick button
   const kickBtn = document.createElement('button');
   kickBtn.className = 'user-action-btn kick-btn';
@@ -98,28 +151,155 @@ function addUserToList(user) {
     e.stopPropagation();
     handleKickUser(user.userId);
   };
-  
+
   actions.appendChild(muteBtn);
   actions.appendChild(pinBtn);
   actions.appendChild(kickBtn);
-  
-  // Toggle active state on click
+
+  // Click selects this user for the main screen (unless deselected)
   userItem.onclick = () => {
     // Close other active items
     document.querySelectorAll('.user-item.active').forEach(item => {
-      if (item !== userItem) {
-        item.classList.remove('active');
-      }
+      if (item !== userItem) item.classList.remove('active');
     });
-    userItem.classList.toggle('active');
+
+    const willBeActive = !userItem.classList.contains('active');
+    userItem.classList.toggle('active', willBeActive);
+
+    selectedUserId = willBeActive ? user.userId : null;
+    reorderUserItemsAndVideos();
   };
-  
-  userItem.appendChild(avatar);
+
+  userItem.appendChild(mediaWrap);
   userItem.appendChild(name);
   userItem.appendChild(actions);
-  usersListElement.appendChild(userItem);
-  
-  console.log(`[Users] Added user to list: ${user.name || 'Anonymous'} (${user.userId})`);
+
+  return userItem;
+}
+
+function renderUsersList() {
+  const usersListElement = document.getElementById('users-list');
+  if (!usersListElement) {
+    console.warn('[Users] Users list element not found');
+    return;
+  }
+
+  usersListElement.innerHTML = '';
+  const usersSorted = getUsersSorted();
+  usersSorted.forEach(u => {
+    usersListElement.appendChild(createUserItemElement(u));
+  });
+
+  // Restore selection UI if still present
+  if (selectedUserId) {
+    setUserItemActive(selectedUserId, true);
+  }
+}
+
+function reorderVideoItems() {
+  const videoGrid = document.getElementById('video-grid');
+  if (!videoGrid) return;
+
+  const placeholder = document.getElementById('video-placeholder');
+  const items = Array.from(videoGrid.querySelectorAll('.video-item'));
+
+  // Sort only by known userId. Unknown items are kept at the end in original order.
+  const known = [];
+  const unknown = [];
+  for (const el of items) {
+    const uid = el.dataset.userId;
+    if (uid) known.push(el);
+    else unknown.push(el);
+  }
+
+  known.sort((a, b) => getPriority(b.dataset.userId) - getPriority(a.dataset.userId));
+
+  // Re-append to DOM in order (keeping placeholder untouched)
+  for (const el of [...known, ...unknown]) {
+    videoGrid.appendChild(el);
+  }
+
+  // Main screen: show only the primary (top priority or selected) video tile
+  const primaryUserId = getPrimaryVideoUserId();
+  const videoItems = Array.from(videoGrid.querySelectorAll('.video-item'));
+  let anyShown = false;
+  const matchedPrimary = primaryUserId
+    ? videoItems.find(el => el.dataset.userId === primaryUserId)
+    : null;
+
+  for (const el of videoItems) {
+    const uid = el.dataset.userId;
+    const shouldShow = matchedPrimary
+      ? uid === primaryUserId
+      : (videoItems.length ? el === videoItems[0] : true);
+    el.style.display = shouldShow ? '' : 'none';
+    if (shouldShow) anyShown = true;
+  }
+
+  // Placeholder visibility (only if there are no visible video tiles)
+  if (placeholder) {
+    placeholder.classList.toggle('hidden', anyShown);
+  }
+}
+
+function displayUsers(users) {
+  ensureLocalUserInState();
+
+  (users || []).forEach((user) => {
+    if (!user || !user.userId) return;
+
+    const existing = userStateById.get(user.userId);
+    if (existing) {
+      existing.name = user.name || existing.name;
+      existing.profileImage = user.profileImage || existing.profileImage;
+      if (!Number.isFinite(existing.priority)) existing.priority = 0;
+    } else {
+      userStateById.set(user.userId, {
+        userId: user.userId,
+        name: user.name || 'Anonymous',
+        profileImage: user.profileImage || '../assets/icons/people.svg',
+        priority: 0,
+        pinned: false,
+        screenShareOn: false,
+        videoOn: false,
+        audioOn: false
+      });
+    }
+  });
+
+  renderUsersList();
+  reorderVideoItems();
+
+  console.log(`[Users] Displayed ${userStateById.size} users in sidebar`);
+}
+
+function addUserToList(user) {
+  if (!user || !user.userId) {
+    console.warn('[Users] Invalid user data:', user);
+    return;
+  }
+
+  ensureLocalUserInState();
+
+  const existing = userStateById.get(user.userId);
+  if (existing) {
+    existing.name = user.name || existing.name;
+    existing.profileImage = user.profileImage || existing.profileImage;
+  } else {
+    userStateById.set(user.userId, {
+      userId: user.userId,
+      name: user.name || 'Anonymous',
+      profileImage: user.profileImage || '../assets/icons/people.svg',
+      priority: 0,
+      pinned: false,
+      screenShareOn: false,
+      videoOn: false,
+      audioOn: false
+    });
+  }
+
+  renderUsersList();
+  reorderVideoItems();
 }
 
 // User action handlers
@@ -133,8 +313,8 @@ function handleMuteUser(userId) {
 
 function handlePinUser(userId, btnElement) {
   console.log('[Users] Pin user:', userId);
-  btnElement.classList.toggle('pinned');
-  // TODO: Implement pin functionality
+  const isPinned = btnElement.classList.toggle('pinned');
+  setPinned(userId, isPinned);
 }
 
 function handleKickUser(userId) {
@@ -148,12 +328,18 @@ function handleKickUser(userId) {
 }
 
 function removeUserFromList(userId) {
-  usersList = usersList.filter(u => u.userId !== userId);
-  
+  userStateById.delete(userId);
+
   const userItem = document.getElementById(`user-${userId}`);
   if (userItem) {
     userItem.remove();
   }
+
+  if (selectedUserId === userId) {
+    selectedUserId = null;
+  }
+
+  reorderUserItemsAndVideos();
 }
 
 // Update user count display
@@ -173,8 +359,64 @@ document.addEventListener('click', (e) => {
     document.querySelectorAll('.user-item.active').forEach(item => {
       item.classList.remove('active');
     });
+    selectedUserId = null;
+    reorderUserItemsAndVideos();
   }
 });
+
+/**
+ * Change user priority by delta and reorder people + video.
+ */
+function changePriority(userId, delta) {
+  if (!userId || !Number.isFinite(delta) || delta === 0) return;
+  const u = userStateById.get(userId);
+  if (!u) return;
+  u.priority = (Number.isFinite(u.priority) ? u.priority : 0) + delta;
+  const el = document.getElementById(`user-${userId}`);
+  if (el) el.dataset.priority = String(u.priority);
+  reorderUserItemsAndVideos();
+}
+
+function setPinned(userId, pinned) {
+  const u = userStateById.get(userId);
+  if (!u) return;
+  const next = !!pinned;
+  if (u.pinned === next) return;
+  u.pinned = next;
+  changePriority(userId, next ? 1000 : -1000);
+}
+
+function setScreenShareOn(userId, on) {
+  const u = userStateById.get(userId);
+  if (!u) return;
+  const next = !!on;
+  if (u.screenShareOn === next) return;
+  u.screenShareOn = next;
+  changePriority(userId, next ? 100 : -100);
+}
+
+function setVideoOn(userId, on) {
+  const u = userStateById.get(userId);
+  if (!u) return;
+  const next = !!on;
+  if (u.videoOn === next) return;
+  u.videoOn = next;
+  changePriority(userId, next ? 10 : -10);
+}
+
+function setAudioOn(userId, on) {
+  const u = userStateById.get(userId);
+  if (!u) return;
+  const next = !!on;
+  if (u.audioOn === next) return;
+  u.audioOn = next;
+  changePriority(userId, next ? 1 : -1);
+}
+
+function reorderUserItemsAndVideos() {
+  renderUsersList();
+  reorderVideoItems();
+}
 
 // Export functions to global scope
 window.UsersModule = {
@@ -182,9 +424,15 @@ window.UsersModule = {
   addUserToList,
   removeUserFromList,
   updateUserCount,
-  getUsersList: () => usersList,
+  getUsersList: () => getUsersSorted(),
   handleMuteUser,
   handlePinUser,
-  handleKickUser
+  handleKickUser,
+  changePriority,
+  setPinned,
+  setScreenShareOn,
+  setVideoOn,
+  setAudioOn,
+  reorderUserItemsAndVideos
 };
 

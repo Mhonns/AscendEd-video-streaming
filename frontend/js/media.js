@@ -31,6 +31,48 @@ const DEFAULT_ICE_SERVERS = [
 let localStream = null;
 let isMicEnabled = false;
 let isCameraEnabled = false;
+let screenStream = null;
+
+/**
+ * Build the stream we should broadcast to the SFU right now.
+ * - If screen sharing is active: broadcast screen video + microphone audio (if present)
+ * - Otherwise: broadcast localStream (camera/mic)
+ */
+function getCurrentBroadcastStream() {
+  // Screen share takes precedence for the outgoing video track
+  if (screenStream) {
+    const out = new MediaStream();
+
+    // Add mic audio tracks if we have them
+    if (localStream) {
+      localStream.getAudioTracks().forEach(t => out.addTrack(t));
+    }
+
+    // Add screen video track
+    const screenVideo = screenStream.getVideoTracks && screenStream.getVideoTracks()[0];
+    if (screenVideo) {
+      out.addTrack(screenVideo);
+    }
+
+    return out;
+  }
+
+  return localStream;
+}
+
+function broadcastCurrentToSFU() {
+  if (!window.SFUBroadcastModule) return;
+
+  const roomId = window.SocketHandler?.getCurrentRoomId();
+  const userId = window.SocketHandler?.getUserId();
+  if (!roomId || !userId) return;
+
+  const streamToSend = getCurrentBroadcastStream();
+  if (!streamToSend) return;
+
+  window.SFUBroadcastModule.broadcastStream(streamToSend, roomId, userId)
+    .catch(err => console.error('[Media] Broadcast failed:', err));
+}
 
 /**
  * Request microphone permission and get audio stream
@@ -82,6 +124,7 @@ async function requestCameraPermission() {
         videoTrack.enabled = true;
         isCameraEnabled = true;
         console.log('Camera enabled');
+        // Update people frame preview (no center tile)
         displayLocalVideo();
         return true;
       }
@@ -107,6 +150,7 @@ async function requestCameraPermission() {
     
     isCameraEnabled = true;
     console.log('Camera permission granted');
+    // Update people frame preview (no center tile)
     displayLocalVideo();
     return true;
   } catch (error) {
@@ -129,11 +173,9 @@ function toggleMicrophone(enabled) {
     isMicEnabled = enabled;
     console.log(`[Media] Microphone ${enabled ? 'enabled' : 'disabled'}`);
     
-    // If not broadcasting yet, start broadcast. Otherwise just notify mute status.
     if (enabled && !window.SFUBroadcastModule?.isBroadcasting()) {
       broadcastToSFU();
     } else {
-      // Just notify mute status - no re-broadcast needed
       window.SFUBroadcastModule?.notifyMuteStatus('audio', !enabled);
     }
   }
@@ -152,6 +194,7 @@ function toggleCamera(enabled) {
     isCameraEnabled = enabled;
     
     if (enabled) {
+      // Show camera preview in people frame (no center tile)
       displayLocalVideo();
       // If not broadcasting yet, start broadcast. Otherwise just notify mute status.
       if (!window.SFUBroadcastModule?.isBroadcasting()) {
@@ -160,12 +203,187 @@ function toggleCamera(enabled) {
         window.SFUBroadcastModule?.notifyMuteStatus('video', false);
       }
     } else {
+      // Hide camera preview in people frame (no center tile)
       hideLocalVideo();
-      // Just notify mute status - no re-broadcast needed
       window.SFUBroadcastModule?.notifyMuteStatus('video', true);
     }
     
     console.log(`[Media] Camera ${enabled ? 'enabled' : 'disabled'}`);
+  }
+}
+
+/**
+ * Start screen sharing and preview it in the main video frame (#video-grid).
+ * This is independent of the camera preview (which lives in the people frame).
+ */
+async function startScreenShare() {
+  if (screenStream) {
+    return screenStream;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    alert('Screen sharing is not supported in this browser.');
+    return null;
+  }
+
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: false
+    });
+
+    // Auto-stop when user ends sharing from browser UI
+    const track = screenStream.getVideoTracks && screenStream.getVideoTracks()[0];
+    if (track) {
+      track.onended = () => {
+        stopScreenShare();
+      };
+    }
+
+    showScreenSharePreview(screenStream);
+
+    const uid = localStorage.getItem('userId');
+    if (uid) {
+      window.UsersModule?.setScreenShareOn?.(uid, true);
+    }
+
+    // UI: make share button green while sharing (also covers the "Stop sharing" browser UI path)
+    const shareBtn = document.getElementById('share-btn');
+    if (shareBtn) {
+      shareBtn.classList.add('sharing');
+    }
+
+    // Stream the screen share to SFU (screen video + mic audio if present).
+    // This will "renegotiate" by recreating the broadcaster peer (see SFUBroadcastModule).
+    broadcastCurrentToSFU();
+
+    console.log('[Media] Screen sharing started');
+    return screenStream;
+  } catch (error) {
+    console.error('[Media] Error starting screen share:', error);
+    screenStream = null;
+    return null;
+  }
+}
+
+function stopScreenShare() {
+  if (!screenStream) return;
+
+  try {
+    screenStream.getTracks().forEach(t => t.stop());
+  } catch (_) {}
+
+  screenStream = null;
+
+  hideScreenSharePreview();
+
+  const uid = localStorage.getItem('userId');
+  if (uid) {
+    window.UsersModule?.setScreenShareOn?.(uid, false);
+  }
+
+  // UI: reset share button color
+  const shareBtn = document.getElementById('share-btn');
+  if (shareBtn) {
+    shareBtn.classList.remove('sharing');
+  }
+
+  // Revert broadcast back to normal camera/mic (or stop if nothing is enabled)
+  if (window.SFUBroadcastModule?.isBroadcasting?.()) {
+    if ((isMicEnabled || isCameraEnabled) && localStream) {
+      broadcastCurrentToSFU(); // now uses localStream since screenStream is null
+    } else {
+      window.SFUBroadcastModule.stopBroadcast?.();
+    }
+  }
+
+  console.log('[Media] Screen sharing stopped');
+}
+
+function isScreenSharing() {
+  return !!screenStream;
+}
+
+function showScreenSharePreview(stream) {
+  const videoGrid = document.getElementById('video-grid');
+  const placeholder = document.getElementById('video-placeholder');
+  if (!videoGrid) return;
+
+  if (placeholder) {
+    placeholder.classList.add('hidden');
+  }
+
+  let container = document.getElementById('main-video-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'main-video-container';
+    container.className = 'video-item local screenshare';
+    const uid = localStorage.getItem('userId');
+    if (uid) container.dataset.userId = uid;
+
+    const videoEl = document.createElement('video');
+    videoEl.id = 'main-video';
+    videoEl.autoplay = true;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+
+    const label = document.createElement('div');
+    label.className = 'video-label';
+    label.textContent = 'You (Screen)';
+
+    container.appendChild(videoEl);
+    container.appendChild(label);
+    videoGrid.appendChild(container);
+  }
+
+  const videoEl = document.getElementById('main-video');
+  if (videoEl) {
+    videoEl.srcObject = stream;
+    videoEl.play?.().catch?.(() => {});
+  }
+
+  updateVideoGridLayout();
+  window.UsersModule?.reorderUserItemsAndVideos?.();
+}
+
+function hideScreenSharePreview() {
+  const container = document.getElementById('main-video-container');
+  const videoGrid = document.getElementById('video-grid');
+  const placeholder = document.getElementById('video-placeholder');
+
+  if (container) {
+    // Only clear the main-video (local screen share), leave remote-video if present
+    const mainVideoEl = document.getElementById('main-video');
+    if (mainVideoEl) {
+      try {
+        mainVideoEl.pause();
+        mainVideoEl.srcObject = null;
+      } catch (_) {}
+      mainVideoEl.remove();
+    }
+    // Update label
+    const label = container.querySelector('.video-label');
+    if (label) label.textContent = 'Remote';
+    // Remove screenshare class, keep remote if remote video exists
+    container.classList.remove('local', 'screenshare');
+    const remoteVideo = document.getElementById('remote-video');
+    if (remoteVideo) {
+      container.classList.add('remote');
+    } else {
+      // No remote video either, remove the whole container
+      container.remove();
+    }
+  }
+
+  updateVideoGridLayout();
+  window.UsersModule?.reorderUserItemsAndVideos?.();
+
+  // If there are no other video tiles left, show placeholder
+  if (videoGrid && placeholder) {
+    const remaining = videoGrid.querySelectorAll('.video-item');
+    if (remaining.length === 0) {
+      placeholder.classList.remove('hidden');
+    }
   }
 }
 
@@ -195,83 +413,26 @@ function stopCamera() {
       localStream.removeTrack(track);
     });
     isCameraEnabled = false;
+    // Hide camera preview in people frame (no center tile)
     hideLocalVideo();
     console.log('[Media] Camera stopped and released');
   }
 }
 
 /**
- * Display local video in the video grid
+ * Display local video (people frame preview only; no center/grid tile)
  */
 function displayLocalVideo() {
-  if (!localStream) return;
-  
-  const videoGrid = document.getElementById('video-grid');
-  const placeholder = document.getElementById('video-placeholder');
-  
-  if (!videoGrid) return;
-  
-  // Hide placeholder
-  if (placeholder) {
-    placeholder.classList.add('hidden');
-  }
-  
-  // Check if local video element already exists
-  let localVideoContainer = document.getElementById('local-video-container');
-  
-  if (!localVideoContainer) {
-    // Create video container
-    localVideoContainer = document.createElement('div');
-    localVideoContainer.id = 'local-video-container';
-    localVideoContainer.className = 'video-item local';
-    
-    // Create video element
-    const videoElement = document.createElement('video');
-    videoElement.id = 'local-video';
-    videoElement.autoplay = true;
-    videoElement.muted = true; // Mute local video to prevent feedback
-    videoElement.playsInline = true;
-    
-    // Create label
-    const label = document.createElement('div');
-    label.className = 'video-label';
-    label.textContent = 'You';
-    
-    localVideoContainer.appendChild(videoElement);
-    localVideoContainer.appendChild(label);
-    videoGrid.appendChild(localVideoContainer);
-  }
-  
-  // Set the stream to the video element
-  const videoElement = document.getElementById('local-video');
-  if (videoElement && localStream) {
-    videoElement.srcObject = localStream;
-  }
-
-  updateVideoGridLayout();
+  // Re-render people list so the local user's avatar swaps to a camera preview
+  window.UsersModule?.reorderUserItemsAndVideos?.();
 }
 
 /**
- * Hide local video
+ * Hide local video (people frame preview only; no center/grid tile)
  */
 function hideLocalVideo() {
-  const localVideoContainer = document.getElementById('local-video-container');
-  const videoGrid = document.getElementById('video-grid');
-  const placeholder = document.getElementById('video-placeholder');
-  
-  if (localVideoContainer) {
-    localVideoContainer.remove();
-  }
-
-  updateVideoGridLayout();
-  
-  // Show placeholder if no other videos
-  if (videoGrid && placeholder) {
-    const remainingVideos = videoGrid.querySelectorAll('.video-item');
-    if (remainingVideos.length === 0) {
-      placeholder.classList.remove('hidden');
-    }
-  }
+  // Re-render people list so the local user's camera preview swaps back to avatar
+  window.UsersModule?.reorderUserItemsAndVideos?.();
 }
 
 /**
@@ -282,8 +443,10 @@ function updateVideoGridLayout() {
   const videoGrid = document.getElementById('video-grid');
   if (!videoGrid) return;
 
-  const tiles = videoGrid.querySelectorAll('.video-item');
-  videoGrid.classList.toggle('single-video', tiles.length === 1);
+  const tiles = Array.from(videoGrid.querySelectorAll('.video-item'));
+  // Count only visible tiles (others may be hidden by priority/selection logic)
+  const visibleTiles = tiles.filter(el => el.style.display !== 'none');
+  videoGrid.classList.toggle('single-video', visibleTiles.length === 1);
 }
 
 /**
@@ -300,6 +463,9 @@ function stopAllMedia() {
     hideLocalVideo();
     console.log('[Media] All media stopped');
   }
+
+  // Also stop screen share if active
+  stopScreenShare();
 }
 
 /**
@@ -346,6 +512,9 @@ window.MediaModule = {
   requestCameraPermission,
   toggleMicrophone,
   toggleCamera,
+  startScreenShare,
+  stopScreenShare,
+  isScreenSharing,
   stopMicrophone,
   stopCamera,
   displayLocalVideo,

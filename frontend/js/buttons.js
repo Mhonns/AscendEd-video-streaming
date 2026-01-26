@@ -38,6 +38,7 @@ function initMicrophoneButton() {
           window.MediaModule?.toggleMicrophone(isMicOn);
           this.classList.remove('off');
           micIcon.src = '../assets/icons/mic.svg';
+          window.UsersModule?.setAudioOn?.(localStorage.getItem('userId'), true);
           console.log('Microphone turned ON');
         }
       } else {
@@ -46,6 +47,7 @@ function initMicrophoneButton() {
         window.MediaModule?.toggleMicrophone(isMicOn);
         this.classList.add('off');
         micIcon.src = '../assets/icons/mic-off.svg';
+        window.UsersModule?.setAudioOn?.(localStorage.getItem('userId'), false);
         console.log('Microphone turned OFF');
       }
     });
@@ -66,6 +68,7 @@ function initCameraButton() {
           isCameraOn = true;
           this.classList.remove('off');
           cameraIcon.src = '../assets/icons/camera.svg';
+          window.UsersModule?.setVideoOn?.(localStorage.getItem('userId'), true);
           console.log('Camera turned ON');
         }
       } else {
@@ -74,6 +77,7 @@ function initCameraButton() {
         isCameraOn = false;
         this.classList.add('off');
         cameraIcon.src = '../assets/icons/camera-off.svg';
+        window.UsersModule?.setVideoOn?.(localStorage.getItem('userId'), false);
         console.log('Camera turned OFF');
       }
     });
@@ -109,9 +113,21 @@ function initShareButton() {
   const shareBtn = document.getElementById('share-btn');
   if (!shareBtn) return;
   
-  shareBtn.addEventListener('click', function() {
+  shareBtn.addEventListener('click', async function() {
     console.log('Share screen clicked');
-    // TODO: Implement screen sharing
+
+    if (!window.MediaModule?.startScreenShare || !window.MediaModule?.stopScreenShare) {
+      console.warn('[Buttons] MediaModule screen share APIs not available');
+      return;
+    }
+
+    const currentlySharing = !!window.MediaModule.isScreenSharing?.();
+
+    if (!currentlySharing) {
+      await window.MediaModule.startScreenShare();
+    } else {
+      window.MediaModule.stopScreenShare();
+    }
   });
 }
 
