@@ -184,10 +184,49 @@ function renderUsersList() {
     return;
   }
 
-  usersListElement.innerHTML = '';
   const usersSorted = getUsersSorted();
-  usersSorted.forEach(u => {
-    usersListElement.appendChild(createUserItemElement(u));
+  const currentUserIds = new Set(usersSorted.map(u => u.userId));
+  
+  // Remove elements for users no longer in the list
+  const existingItems = usersListElement.querySelectorAll('.user-item');
+  existingItems.forEach(item => {
+    const userId = item.dataset.userId;
+    if (!currentUserIds.has(userId)) {
+      item.remove();
+    }
+  });
+  
+  // Reorder only if needed
+  usersSorted.forEach((u, targetIndex) => {
+    let userItem = document.getElementById(`user-${u.userId}`);
+    
+    if (!userItem) {
+      // Create new element
+      userItem = createUserItemElement(u);
+      // Insert at correct position
+      const refNode = usersListElement.children[targetIndex];
+      if (refNode) {
+        usersListElement.insertBefore(userItem, refNode);
+      } else {
+        usersListElement.appendChild(userItem);
+      }
+    } else {
+      // Update existing element
+      userItem.dataset.priority = String(u.priority || 0);
+      updateLocalCameraPreview(userItem, u.userId);
+      
+      // Only move if position is wrong
+      const currentIndex = Array.from(usersListElement.children).indexOf(userItem);
+      if (currentIndex !== targetIndex) {
+        const refNode = usersListElement.children[targetIndex];
+        if (refNode && refNode !== userItem) {
+          usersListElement.insertBefore(userItem, refNode);
+        } else if (currentIndex > targetIndex) {
+          // Element needs to move earlier
+          usersListElement.insertBefore(userItem, usersListElement.children[targetIndex]);
+        }
+      }
+    }
   });
 
   // Restore selection UI if still present
@@ -271,6 +310,48 @@ function displayUsers(users) {
   reorderVideoItems();
 
   console.log(`[Users] Displayed ${userStateById.size} users in sidebar`);
+}
+
+/**
+ * Update local user's camera preview on existing element
+ */
+function updateLocalCameraPreview(userItem, userId) {
+  const isLocalUser = userId === getLocalUserId();
+  if (!isLocalUser) return;
+  
+  const localStream = window.MediaModule?.getLocalStream?.();
+  const localVideoTrack = localStream?.getVideoTracks?.()?.[0];
+  const shouldShowCameraPreview = !!(localVideoTrack && localVideoTrack.enabled);
+  
+  const mediaWrap = userItem.querySelector('.user-media');
+  const avatar = userItem.querySelector('.user-avatar');
+  let videoPreview = mediaWrap?.querySelector('.user-video-preview');
+  
+  if (shouldShowCameraPreview) {
+    // Show camera preview
+    if (avatar) avatar.style.display = 'none';
+    
+    if (!videoPreview && mediaWrap) {
+      videoPreview = document.createElement('video');
+      videoPreview.className = 'user-video-preview';
+      videoPreview.autoplay = true;
+      videoPreview.muted = true;
+      videoPreview.playsInline = true;
+      mediaWrap.insertBefore(videoPreview, avatar);
+    }
+    
+    if (videoPreview && videoPreview.srcObject !== localStream) {
+      videoPreview.srcObject = localStream;
+      videoPreview.play?.().catch?.(() => {});
+    }
+  } else {
+    // Hide camera preview, show avatar
+    if (avatar) avatar.style.display = '';
+    if (videoPreview) {
+      videoPreview.srcObject = null;
+      videoPreview.remove();
+    }
+  }
 }
 
 function addUserToList(user) {
