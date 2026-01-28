@@ -4,7 +4,7 @@
  */
 
 // Per-user state for this client (priority is local/client-side)
-const userStateById = new Map(); // userId -> { userId, name, profileImage, priority, pinned, screenShareOn, videoOn, audioOn }
+const userStateById = new Map(); // userId -> { userId, name, profileImage, priority, pinned, screenShareOn, videoOn, audioOn, handsUp }
 let selectedUserId = null; // user selected in people frame (overrides "top priority" for main video)
 
 function getLocalUserId() {
@@ -33,7 +33,8 @@ function ensureLocalUserInState() {
     pinned: false,
     screenShareOn: false,
     videoOn: false,
-    audioOn: false
+    audioOn: false,
+    handsUp: false
   });
 }
 
@@ -115,7 +116,18 @@ function createUserItemElement(user) {
 
   const name = document.createElement('div');
   name.className = 'user-name';
-  name.textContent = user.name || 'Anonymous';
+  
+  // Add hand icon if user has hands up
+  if (user.handsUp) {
+    const handIcon = document.createElement('img');
+    handIcon.className = 'hand-icon';
+    handIcon.src = '../assets/icons/raise-hand.svg';
+    handIcon.alt = 'Hand raised';
+    name.appendChild(handIcon);
+  }
+  
+  const nameText = document.createTextNode(user.name || 'Anonymous');
+  name.appendChild(nameText);
 
   // Create action buttons container
   const actions = document.createElement('div');
@@ -301,7 +313,8 @@ function displayUsers(users) {
         pinned: false,
         screenShareOn: false,
         videoOn: false,
-        audioOn: false
+        audioOn: false,
+        handsUp: false
       });
     }
   });
@@ -375,7 +388,8 @@ function addUserToList(user) {
       pinned: false,
       screenShareOn: false,
       videoOn: false,
-      audioOn: false
+      audioOn: false,
+      handsUp: false
     });
   }
 
@@ -446,52 +460,93 @@ document.addEventListener('click', (e) => {
 });
 
 /**
- * Change user priority by delta and reorder people + video.
+ * Priority weights - higher value = higher priority in the list
  */
-function changePriority(userId, delta) {
-  if (!userId || !Number.isFinite(delta) || delta === 0) return;
+const PRIORITY_WEIGHTS = {
+  pinned: 10000,
+  handsUp: 1000,
+  screenShareOn: 100,
+  videoOn: 10,
+  audioOn: 1
+};
+
+/**
+ * Recalculate priority from user flags and update UI
+ */
+function recalculatePriority(userId) {
   const u = userStateById.get(userId);
   if (!u) return;
-  u.priority = (Number.isFinite(u.priority) ? u.priority : 0) + delta;
+  
+  u.priority = 
+    (u.pinned ? PRIORITY_WEIGHTS.pinned : 0) +
+    (u.handsUp ? PRIORITY_WEIGHTS.handsUp : 0) +
+    (u.screenShareOn ? PRIORITY_WEIGHTS.screenShareOn : 0) +
+    (u.videoOn ? PRIORITY_WEIGHTS.videoOn : 0) +
+    (u.audioOn ? PRIORITY_WEIGHTS.audioOn : 0);
+  
   const el = document.getElementById(`user-${userId}`);
   if (el) el.dataset.priority = String(u.priority);
+  
   reorderUserItemsAndVideos();
 }
 
-function setPinned(userId, pinned) {
+/**
+ * Generic setter for user state flags
+ */
+function setUserFlag(userId, flag, value) {
   const u = userStateById.get(userId);
   if (!u) return;
-  const next = !!pinned;
-  if (u.pinned === next) return;
-  u.pinned = next;
-  changePriority(userId, next ? 1000 : -1000);
+  const next = !!value;
+  if (u[flag] === next) return;
+  u[flag] = next;
+  recalculatePriority(userId);
+  return true; // Flag was changed
+}
+
+function setPinned(userId, pinned) {
+  setUserFlag(userId, 'pinned', pinned);
 }
 
 function setScreenShareOn(userId, on) {
-  const u = userStateById.get(userId);
-  if (!u) return;
-  const next = !!on;
-  if (u.screenShareOn === next) return;
-  u.screenShareOn = next;
-  changePriority(userId, next ? 100 : -100);
+  setUserFlag(userId, 'screenShareOn', on);
 }
 
 function setVideoOn(userId, on) {
-  const u = userStateById.get(userId);
-  if (!u) return;
-  const next = !!on;
-  if (u.videoOn === next) return;
-  u.videoOn = next;
-  changePriority(userId, next ? 10 : -10);
+  setUserFlag(userId, 'videoOn', on);
 }
 
 function setAudioOn(userId, on) {
-  const u = userStateById.get(userId);
-  if (!u) return;
-  const next = !!on;
-  if (u.audioOn === next) return;
-  u.audioOn = next;
-  changePriority(userId, next ? 1 : -1);
+  setUserFlag(userId, 'audioOn', on);
+}
+
+function setHandsUp(userId, on) {
+  if (setUserFlag(userId, 'handsUp', on)) {
+    updateHandIcon(userId, on);
+  }
+}
+
+function updateHandIcon(userId, handsUp) {
+  const userItem = document.getElementById(`user-${userId}`);
+  if (!userItem) return;
+  
+  const userName = userItem.querySelector('.user-name');
+  if (!userName) return;
+  
+  let handIcon = userName.querySelector('.hand-icon');
+  
+  if (handsUp) {
+    if (!handIcon) {
+      handIcon = document.createElement('img');
+      handIcon.className = 'hand-icon';
+      handIcon.src = '../assets/icons/raise-hand.svg';
+      handIcon.alt = 'Hand raised';
+      userName.insertBefore(handIcon, userName.firstChild);
+    }
+  } else {
+    if (handIcon) {
+      handIcon.remove();
+    }
+  }
 }
 
 function reorderUserItemsAndVideos() {
@@ -509,11 +564,11 @@ window.UsersModule = {
   handleMuteUser,
   handlePinUser,
   handleKickUser,
-  changePriority,
   setPinned,
   setScreenShareOn,
   setVideoOn,
   setAudioOn,
+  setHandsUp,
   reorderUserItemsAndVideos
 };
 

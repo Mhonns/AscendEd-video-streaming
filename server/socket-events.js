@@ -120,6 +120,52 @@ function initSocketEvents(io) {
         await sfuModule.addIceCandidate(roomId, userId, candidate, type, streamKey);
       }
     });
+
+    // Handle hands-up toggle
+    socket.on('toggle-handsup', (data) => {
+      const { roomId, userId, handsUp } = data;
+      
+      if (!roomId || !userId) {
+        console.warn('[SocketEvents] Invalid toggle-handsup data:', data);
+        return;
+      }
+
+      const room = roomsModule.getRoom(roomId);
+      if (!room || !room.isActive) {
+        return;
+      }
+
+      console.log(`[SocketEvents] User ${userId} ${handsUp ? 'raised' : 'lowered'} hand in room ${roomId}`);
+
+      // Broadcast to all users in the room (including sender for confirmation)
+      io.to(roomId).emit('user-handsup-status', {
+        userId,
+        handsUp
+      });
+    });
+
+    // Handle emoji reaction
+    socket.on('emoji-reaction', (data) => {
+      const { roomId, userId, emoji } = data;
+      
+      if (!roomId || !userId || !emoji) {
+        console.warn('[SocketEvents] Invalid emoji-reaction data:', data);
+        return;
+      }
+
+      const room = roomsModule.getRoom(roomId);
+      if (!room || !room.isActive) {
+        return;
+      }
+
+      console.log(`[SocketEvents] User ${userId} reacted with ${emoji} in room ${roomId}`);
+
+      // Broadcast to all users in the room (including sender)
+      io.to(roomId).emit('emoji-reaction', {
+        userId,
+        emoji
+      });
+    });
   });
 }
 

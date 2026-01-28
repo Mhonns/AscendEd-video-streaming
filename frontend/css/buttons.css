@@ -237,6 +237,15 @@ input[type="reset"] {
   background: rgba(76, 175, 80, 0.65);
 }
 
+/* Raise hand button: yellow when hand is raised */
+#raise-hand-btn.hand-raised {
+  background: rgba(255, 193, 7, 0.5);
+}
+
+#raise-hand-btn.hand-raised:hover {
+  background: rgba(255, 193, 7, 0.65);
+}
+
 .leave-btn {
   background: rgba(255, 59, 48, 0.3);
 }
@@ -282,6 +291,89 @@ input[type="reset"] {
 @media (max-width: 480px) {
   .permission-btn {
     padding: clamp(6px, 1.2vh, 10px) clamp(16px, 2.5vw, 24px);
+  }
+}
+
+/* Emoji Picker */
+.emoji-picker {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.9);
+  background: rgba(30, 30, 35, 0.95);
+  border-radius: 16px;
+  padding: 12px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.emoji-picker.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+}
+
+.emoji-picker-content {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.emoji-item {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.emoji-item:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.15);
+}
+
+.emoji-item:active {
+  transform: scale(0.95);
+}
+
+/* Emoji Reactions Container */
+.emoji-reactions-container {
+  position: fixed;
+  bottom: 100px;
+  left: 0;
+  right: 0;
+  height: 200px;
+  pointer-events: none;
+  z-index: 999;
+  overflow: hidden;
+}
+
+/* Floating Emoji Animation */
+.floating-emoji {
+  position: absolute;
+  bottom: 0;
+  font-size: 48px;
+  animation: float-emoji 2s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes float-emoji {
+  0% {
+    transform: translateY(0) scale(1.5);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-180px) scale(0.5);
+    opacity: 0;
   }
 }
 

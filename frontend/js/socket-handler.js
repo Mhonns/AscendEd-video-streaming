@@ -198,6 +198,18 @@ async function initSocket(roomId, userData) {
     }
   });
 
+  // Handle hands-up status changed
+  socket.on('user-handsup-status', (data) => {
+    console.log('[SocketHandler] User hands-up status:', data);
+    window.UsersModule?.setHandsUp?.(data.userId, data.handsUp);
+  });
+
+  // Handle emoji reaction
+  socket.on('emoji-reaction', (data) => {
+    console.log('[SocketHandler] Emoji reaction:', data);
+    window.ButtonsModule?.showFloatingEmoji?.(data.emoji);
+  });
+
   // Handle request to stop screen share from another user
   socket.on('stop-screenshare-request', (data) => {
     console.log('[SocketHandler] Stop screenshare request:', data);

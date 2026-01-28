@@ -192,6 +192,16 @@ body.ui-hidden .users-sidebar {
   border-radius: 6px;
   backdrop-filter: blur(4px);
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hand-icon {
+  width: 14px;
+  height: 14px;
+  filter: invert(78%) sepia(60%) saturate(1000%) hue-rotate(359deg) brightness(103%) contrast(101%);
+  flex-shrink: 0;
 }
 
 /* Adjust users sidebar when chat is visible */
@@ -349,3 +359,22 @@ body.chat-visible .users-sidebar {
   }
 }
 
+.user-camera-video {
+  max-height: 100%;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: auto;
+}
+
+.user-video-preview {
+  max-height: 100%;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: auto;
+}

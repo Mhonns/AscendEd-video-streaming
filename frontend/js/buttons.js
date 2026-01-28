@@ -7,6 +7,7 @@ let isMicOn = false;
 let isCameraOn = false;
 let isRecording = false; // Start with recording on
 let peopleListVisible = true; // Default to visible
+let isHandRaised = false;
 
 const usersSidebar = document.getElementById('users-sidebar');
 
@@ -16,6 +17,8 @@ function initButtons() {
   initCameraButton();
   initRecordingButton();
   initShareButton();
+  initRaiseHandButton();
+  initReactionButton();
   initPeopleButton();
   initToggleUIButton();
   initFullscreenButton();
@@ -130,6 +133,102 @@ function initShareButton() {
     } else {
       window.MediaModule.stopScreenShare();
     }
+  });
+}
+
+// Toggle raise hand
+function initRaiseHandButton() {
+  const raiseHandBtn = document.getElementById('raise-hand-btn');
+  if (!raiseHandBtn) return;
+
+  raiseHandBtn.addEventListener('click', function() {
+    isHandRaised = !isHandRaised;
+    
+    // Toggle button active state (yellow)
+    this.classList.toggle('hand-raised', isHandRaised);
+    
+    // Get socket and room info
+    const socket = window.SocketHandler?.getSocket();
+    const roomId = window.SocketHandler?.getCurrentRoomId();
+    const userId = localStorage.getItem('userId');
+    
+    if (socket && roomId && userId) {
+      // Emit to server
+      socket.emit('toggle-handsup', {
+        roomId,
+        userId,
+        handsUp: isHandRaised
+      });
+      console.log(`Hand ${isHandRaised ? 'raised' : 'lowered'}`);
+    }
+  });
+}
+
+// Emoji reaction
+function initReactionButton() {
+  const reactionBtn = document.getElementById('reaction-btn');
+  const emojiPicker = document.getElementById('emoji-picker');
+  if (!reactionBtn || !emojiPicker) return;
+
+  // Toggle emoji picker on button click
+  reactionBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    emojiPicker.classList.toggle('show');
+  });
+
+  // Handle emoji selection
+  emojiPicker.addEventListener('click', function(e) {
+    const emojiItem = e.target.closest('.emoji-item');
+    if (!emojiItem) return;
+
+    const emoji = emojiItem.dataset.emoji;
+    if (!emoji) return;
+
+    // Close picker
+    emojiPicker.classList.remove('show');
+
+    // Get socket and room info
+    const socket = window.SocketHandler?.getSocket();
+    const roomId = window.SocketHandler?.getCurrentRoomId();
+    const userId = localStorage.getItem('userId');
+
+    if (socket && roomId && userId) {
+      // Emit to server
+      socket.emit('emoji-reaction', {
+        roomId,
+        userId,
+        emoji
+      });
+      console.log(`Sent emoji reaction: ${emoji}`);
+    }
+  });
+
+  // Close picker when clicking outside
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.emoji-picker') && !e.target.closest('#reaction-btn')) {
+      emojiPicker.classList.remove('show');
+    }
+  });
+}
+
+// Show floating emoji animation
+function showFloatingEmoji(emoji) {
+  const container = document.getElementById('emoji-reactions-container');
+  if (!container) return;
+
+  const emojiEl = document.createElement('span');
+  emojiEl.className = 'floating-emoji';
+  emojiEl.textContent = emoji;
+
+  // Random horizontal position (10% to 90% of container width)
+  const randomX = 10 + Math.random() * 80;
+  emojiEl.style.left = `${randomX}%`;
+
+  container.appendChild(emojiEl);
+
+  // Remove element after animation completes
+  emojiEl.addEventListener('animationend', () => {
+    emojiEl.remove();
   });
 }
 
@@ -309,5 +408,6 @@ window.ButtonsModule = {
   getCameraState: () => isCameraOn,
   getRecordingState: () => isRecording,
   setMicState: (state) => { isMicOn = state; },
-  setCameraState: (state) => { isCameraOn = state; }
+  setCameraState: (state) => { isCameraOn = state; },
+  showFloatingEmoji
 };
