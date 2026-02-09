@@ -38,15 +38,24 @@ const iceServers = [
 /**
  * Stream Types:
  * - main: audio only (always broadcast when mic is on)
- * - screen: screen share video only
  * - camera: camera video only (for sidebar display)
+ * - screen: screen share video only
+ * - media: combined audio + camera stream (auto-created from main + camera)
  * 
  * Storage key format: "userId:streamType" (e.g., "user123:main", "user123:camera")
+ * 
+ * Audio (main) and camera tracks are automatically combined into a single "media" stream per user.
+ * This allows consumers to receive one stream with both audio and video tracks instead of separate streams.
+ * Screen shares remain as separate streams.
  */
 
 // Map to store room -> stream key -> MediaStream
-// Key format: "userId:streamType" where streamType is 'main', 'screen', or 'camera'
+// Key format: "userId:streamType" where streamType is 'main', 'screen', 'camera', or 'media'
 const roomUserStreams = new Map();
+
+// Map to store combined media streams: roomId -> userId -> MediaStream
+// This combines audio (main) and camera tracks into one stream
+const roomCombinedStreams = new Map();
 
 // Map to track broadcaster peer connections: roomId -> streamKey -> peer
 const broadcasterPeers = new Map();
@@ -88,6 +97,9 @@ function parseStreamKey(streamKey) {
 /**
  * Consumer endpoint - receives all streams from the room
  * Returns metadata about which streams belong to which users
+ * 
+ * Sends combined "media" streams (audio + camera) when available,
+ * and separate "screen" streams for screen shares.
  */
 app.post("/consumer", async ({ body }, res) => {    
     const { sdp, roomId, userId } = body;
@@ -138,8 +150,13 @@ app.post("/consumer", async ({ body }, res) => {
     // Store the consuming user's ID for the loop
     const consumerId = userId;
     
+    // Track which users we've already sent combined streams for
+    const sentCombinedFor = new Set();
+    
     if (roomStreams) {
         let tracksAdded = 0;
+        
+        // First pass: send combined "media" streams (audio + camera)
         roomStreams.forEach((stream, streamKey) => {
             const { userId: streamUserId, streamType } = parseStreamKey(streamKey);
             
@@ -149,19 +166,65 @@ app.post("/consumer", async ({ body }, res) => {
                 return;
             }
             
-            // Add metadata for this stream
-            streamMetadata.push({
-                streamId: stream.id,
-                oderId: streamUserId,
-                streamType
-            });
-            
-            stream.getTracks().forEach(track => {
-                console.log(`[CONSUME] Sending track from ${streamKey} to ${consumerId}: { kind: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState} }`);
-                peer.addTrack(track, stream);
-                tracksAdded++;
-            });
+            // For combined "media" streams, send them and mark user as handled
+            if (streamType === 'media') {
+                sentCombinedFor.add(streamUserId);
+                
+                // Add metadata for this stream
+                streamMetadata.push({
+                    streamId: stream.id,
+                    oderId: streamUserId,
+                    streamType: 'media'
+                });
+                
+                stream.getTracks().forEach(track => {
+                    console.log(`[CONSUME] Sending combined track from ${streamKey} to ${consumerId}: { kind: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState} }`);
+                    peer.addTrack(track, stream);
+                    tracksAdded++;
+                });
+            }
         });
+        
+        // Second pass: send screen shares and any standalone audio/camera (if no combined stream)
+        roomStreams.forEach((stream, streamKey) => {
+            const { userId: streamUserId, streamType } = parseStreamKey(streamKey);
+            
+            // Don't send user's own streams back
+            if (streamUserId === consumerId) {
+                return;
+            }
+            
+            // Screen shares are always sent separately
+            if (streamType === 'screen') {
+                streamMetadata.push({
+                    streamId: stream.id,
+                    oderId: streamUserId,
+                    streamType: 'screen'
+                });
+                
+                stream.getTracks().forEach(track => {
+                    console.log(`[CONSUME] Sending screen track from ${streamKey} to ${consumerId}: { kind: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState} }`);
+                    peer.addTrack(track, stream);
+                    tracksAdded++;
+                });
+            }
+            
+            // Only send standalone main/camera if no combined stream exists for this user
+            if ((streamType === 'main' || streamType === 'camera') && !sentCombinedFor.has(streamUserId)) {
+                streamMetadata.push({
+                    streamId: stream.id,
+                    oderId: streamUserId,
+                    streamType
+                });
+                
+                stream.getTracks().forEach(track => {
+                    console.log(`[CONSUME] Sending standalone track from ${streamKey} to ${consumerId}: { kind: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState} }`);
+                    peer.addTrack(track, stream);
+                    tracksAdded++;
+                });
+            }
+        });
+        
         console.log(`[CONSUME] Added ${tracksAdded} track(s) for ${consumerId}`);
     } else {
         console.log(`[CONSUME] WARNING: No streams in room ${roomId}`);
@@ -389,6 +452,99 @@ function waitForPendingBroadcasts(roomId) {
     });
 }
 
+/**
+ * Get or create combined media stream for a user (audio + camera)
+ */
+function getCombinedStream(roomId, userId) {
+    if (!roomCombinedStreams.has(roomId)) {
+        roomCombinedStreams.set(roomId, new Map());
+    }
+    
+    const userStreams = roomCombinedStreams.get(roomId);
+    if (!userStreams.has(userId)) {
+        // Create a new MediaStream for combining audio + camera
+        const combinedStream = new webrtc.MediaStream();
+        userStreams.set(userId, combinedStream);
+        console.log(`[COMBINED] Created new combined stream for ${userId} in room ${roomId}`);
+    }
+    
+    return userStreams.get(userId);
+}
+
+/**
+ * Add track to user's combined media stream
+ */
+function addToCombinedStream(roomId, userId, track) {
+    const combinedStream = getCombinedStream(roomId, userId);
+    
+    // Remove existing track of same kind to prevent duplicates
+    if (track.kind === 'video') {
+        combinedStream.getVideoTracks().forEach(t => {
+            combinedStream.removeTrack(t);
+            console.log(`[COMBINED] Removed old video track from ${userId}'s combined stream`);
+        });
+    }
+    if (track.kind === 'audio') {
+        combinedStream.getAudioTracks().forEach(t => {
+            combinedStream.removeTrack(t);
+            console.log(`[COMBINED] Removed old audio track from ${userId}'s combined stream`);
+        });
+    }
+    
+    // Add the new track
+    combinedStream.addTrack(track);
+    console.log(`[COMBINED] Added ${track.kind} track to ${userId}'s combined stream`);
+    
+    // Store the combined stream in roomUserStreams for consumers to access
+    const combinedKey = makeStreamKey(userId, 'media');
+    if (!roomUserStreams.has(roomId)) {
+        roomUserStreams.set(roomId, new Map());
+    }
+    roomUserStreams.get(roomId).set(combinedKey, combinedStream);
+    
+    // Log combined stream status
+    const audioTracks = combinedStream.getAudioTracks().length;
+    const videoTracks = combinedStream.getVideoTracks().length;
+    console.log(`[COMBINED] ${userId}'s combined stream now has ${audioTracks} audio, ${videoTracks} video tracks`);
+    
+    return combinedStream;
+}
+
+/**
+ * Remove track from user's combined media stream
+ */
+function removeFromCombinedStream(roomId, userId, trackKind) {
+    const userStreams = roomCombinedStreams.get(roomId);
+    if (!userStreams) return;
+    
+    const combinedStream = userStreams.get(userId);
+    if (!combinedStream) return;
+    
+    if (trackKind === 'video') {
+        combinedStream.getVideoTracks().forEach(t => {
+            combinedStream.removeTrack(t);
+        });
+        console.log(`[COMBINED] Removed video from ${userId}'s combined stream`);
+    }
+    if (trackKind === 'audio') {
+        combinedStream.getAudioTracks().forEach(t => {
+            combinedStream.removeTrack(t);
+        });
+        console.log(`[COMBINED] Removed audio from ${userId}'s combined stream`);
+    }
+    
+    // If combined stream is empty, remove it entirely
+    if (combinedStream.getTracks().length === 0) {
+        userStreams.delete(userId);
+        const combinedKey = makeStreamKey(userId, 'media');
+        const roomStreams = roomUserStreams.get(roomId);
+        if (roomStreams) {
+            roomStreams.delete(combinedKey);
+        }
+        console.log(`[COMBINED] Removed empty combined stream for ${userId}`);
+    }
+}
+
 function handleTrackEvent(e, roomId, userId, streamType) {
     const stream = e.streams[0];
     const track = e.track;
@@ -399,7 +555,14 @@ function handleTrackEvent(e, roomId, userId, streamType) {
     if (!roomUserStreams.has(roomId)) {
         roomUserStreams.set(roomId, new Map());
     }
+    
+    // Store the original stream (for reference/debugging)
     roomUserStreams.get(roomId).set(streamKey, stream);
+    
+    // For audio (main) and camera streams, also add to combined stream
+    if (streamType === 'main' || streamType === 'camera') {
+        addToCombinedStream(roomId, userId, track);
+    }
     
     // Log current streams in room
     const streamCount = roomUserStreams.get(roomId).size;
@@ -427,6 +590,10 @@ function handleTrackEvent(e, roomId, userId, streamType) {
 function destroyRoomStreams(roomId) {
     if (roomUserStreams.has(roomId)) {
         roomUserStreams.delete(roomId);
+    }
+    // Clean up combined streams map
+    if (roomCombinedStreams.has(roomId)) {
+        roomCombinedStreams.delete(roomId);
     }
     // Close all broadcaster peer connections for this room
     const roomBroadcasters = broadcasterPeers.get(roomId);
@@ -467,6 +634,13 @@ function removeStream(roomId, userId, streamType) {
         }
     }
     
+    // For audio (main) and camera streams, also remove from combined stream
+    if (streamType === 'main') {
+        removeFromCombinedStream(roomId, userId, 'audio');
+    } else if (streamType === 'camera') {
+        removeFromCombinedStream(roomId, userId, 'video');
+    }
+    
     // Notify other users in the room that stream stopped
     if (io) {
         io.to(roomId).emit('stream-stopped', { 
@@ -487,6 +661,12 @@ function removeUserStreams(roomId, userId) {
     ['main', 'screen', 'camera'].forEach(streamType => {
         removeStream(roomId, userId, streamType);
     });
+    
+    // Also clean up combined stream entry directly
+    const userStreams = roomCombinedStreams.get(roomId);
+    if (userStreams) {
+        userStreams.delete(userId);
+    }
 }
 
 function removeConsumer(roomId, oderId) {

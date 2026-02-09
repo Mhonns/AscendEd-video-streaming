@@ -1,26 +1,24 @@
-### Feedback and TODO
 ## Feature
-# setting eg. sound out, mic in, noise cancel, backgroun blur, disable emoji
-# Owner pin ban kick mute and mute all
-
-## Security
-# Load Test (DDoS) and QA
-# Pent Test
+# Recording ***
+# Owner ban kick mute and mute all **
+# Setting eg. sound out, mic in, noise cancel, background blur, disable emoji, defautl mute **
 
 ## Materials
-# Update diagrams
+# Add flowchart of function ***
+# Update diagrams ***
+# Draft test plan ***
 
-## Testing
-# Unit test
-# Load test try many web rtc connection
+## Testing & Security
+# Unit test 
+# Load test try many web rtc connection DDoS and QA + Pent Test
 # Browser Test
 # Device Test
 
-### SFU
-## Server
+## SFU Server
 # Sanitize User Request
 # Optimize ICE and STUN Server to fit situation
 
-## Client
-# APP for mobile to share their screen
+## SFU Client
+# APP for mobile to share their screen ***
 # Grouping js files
+# Optimize video stream resolution # for user student

@@ -341,7 +341,7 @@ function updateLocalCameraPreview(userItem, userId) {
   let videoPreview = mediaWrap?.querySelector('.user-video-preview');
   
   if (shouldShowCameraPreview) {
-    // Show camera preview
+    // Show camera preview, hide avatar
     if (avatar) avatar.style.display = 'none';
     
     if (!videoPreview && mediaWrap) {
@@ -358,11 +358,15 @@ function updateLocalCameraPreview(userItem, userId) {
       videoPreview.play?.().catch?.(() => {});
     }
   } else {
-    // Hide camera preview, show avatar
-    if (avatar) avatar.style.display = '';
+    // Hide camera preview, show avatar (profile image)
     if (videoPreview) {
+      videoPreview.pause();
       videoPreview.srcObject = null;
       videoPreview.remove();
+    }
+    // Explicitly show the avatar by removing display:none
+    if (avatar) {
+      avatar.style.display = 'block';
     }
   }
 }
