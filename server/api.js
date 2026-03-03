@@ -7,17 +7,13 @@ const express = require('express');
 const router = express.Router();
 const roomsModule = require('./rooms');
 
-// ============================================
-// Room API Endpoints
-// ============================================
-
 /**
  * POST /api/rooms/create
  * Create a new room
  */
 router.post('/rooms/create', (req, res) => {
-  const { roomId, meetingName } = req.body;
-  
+  const { roomId, meetingName, hostId: clientHostId } = req.body;
+
   if (!roomId) {
     return res.status(400).json({ error: 'Room ID is required' });
   }
@@ -27,9 +23,11 @@ router.post('/rooms/create', (req, res) => {
     return res.status(409).json({ error: 'Room already exists' });
   }
 
-  const hostId = `host_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  // Use the client's own userId as hostId so isHost() correctly identifies them.
+  // Fall back to a server-generated id only if the client didn't send one.
+  const hostId = clientHostId || `host_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const room = roomsModule.createRoom(roomId, meetingName, hostId);
-  
+
   res.json({
     success: true,
     room: {
@@ -46,20 +44,20 @@ router.post('/rooms/create', (req, res) => {
  */
 router.post('/rooms/join', (req, res) => {
   const { roomId } = req.body;
-  
+
   if (!roomId) {
     return res.status(400).json({ error: 'Room ID is required' });
   }
 
   const room = roomsModule.getRoom(roomId);
-  
+
   if (!room || !room.isActive) {
     return res.status(404).json({ error: 'Room not found or inactive' });
   }
 
   const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   roomsModule.joinRoom(roomId, userId);
-  
+
   res.json({
     success: true,
     room: {
@@ -77,16 +75,17 @@ router.post('/rooms/join', (req, res) => {
 router.get('/rooms/:roomId', (req, res) => {
   const { roomId } = req.params;
   const room = roomsModule.getRoom(roomId);
-  
+
   if (!room || !room.isActive) {
     return res.status(404).json({ error: 'Room not found or inactive' });
   }
-  
+
   res.json({
     success: true,
     room: {
       id: room.id,
       name: room.name,
+      hostId: room.hostId,
       participantCount: room.participants.size
     }
   });
@@ -99,13 +98,13 @@ router.get('/rooms/:roomId', (req, res) => {
 router.get('/rooms/:roomId/users', (req, res) => {
   const { roomId } = req.params;
   const room = roomsModule.getRoom(roomId);
-  
+
   if (!room || !room.isActive) {
     return res.status(404).json({ error: 'Room not found or inactive' });
   }
-  
+
   const roomUsers = roomsModule.getRoomUsers(roomId);
-  
+
   res.json({
     success: true,
     users: roomUsers
@@ -122,7 +121,7 @@ router.get('/rooms/:roomId/users', (req, res) => {
  */
 router.post('/users/profile', (req, res) => {
   const { userId, name } = req.body;
-  
+
   if (!userId || !name) {
     return res.status(400).json({ error: 'User ID and name are required' });
   }
@@ -130,7 +129,7 @@ router.post('/users/profile', (req, res) => {
   console.log(`Saving user profile for ${userId}: ${name}`);
 
   const user = roomsModule.saveUserProfile(userId, name);
-  
+
   res.json({
     success: true,
     user: user
@@ -144,11 +143,11 @@ router.post('/users/profile', (req, res) => {
 router.get('/users/:userId', (req, res) => {
   const { userId } = req.params;
   const user = roomsModule.getUserProfile(userId);
-  
+
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
-  
+
   res.json({
     success: true,
     user: user

@@ -31,7 +31,7 @@ function setCurrentRoomId(roomId) {
 async function initSocket(roomId, userData) {
   currentRoomId = roomId;
   userId = userData.userId;
-  
+
   // Connect to Socket.io server
   socket = io(getServerURL());
 
@@ -47,7 +47,7 @@ async function initSocket(roomId, userData) {
   socket.on('room-joined', async (data) => {
     console.log('[SocketHandler] Successfully joined room:', data);
     document.querySelector('.room-name').textContent = data.roomName;
-    
+
     // Display all users in sidebar and update count
     if (data.users && Array.isArray(data.users)) {
       console.log(`[SocketHandler] Received ${data.users.length} users from server:`, data.users);
@@ -56,10 +56,17 @@ async function initSocket(roomId, userData) {
     } else {
       console.warn('[SocketHandler] No users data received or invalid format:', data);
     }
-    
+
     // Load chat history if available
     if (data.chatHistory && Array.isArray(data.chatHistory) && window.ChatModule) {
       window.ChatModule.loadChatHistory(data.chatHistory);
+    }
+
+    // Sync recording state for users joining mid-recording
+    if (window.RecordingModule && typeof window.RecordingModule.onRecordingStarted === 'function') {
+      if (data.recordingActive) {
+        window.RecordingModule.onRecordingStarted();
+      }
     }
 
     // SFU: on join, POST to /consumer to consume current streams from other users
@@ -85,7 +92,7 @@ async function initSocket(roomId, userData) {
     if (data.user) {
       window.UsersModule.addUserToList(data.user);
       window.UsersModule.updateUserCount(window.UsersModule.getUsersList().length);
-      
+
       // Check for pending camera stream for this user
       window.SFUConsumeModule?.applyPendingCameraStream?.(data.user.userId);
     }
@@ -96,7 +103,7 @@ async function initSocket(roomId, userData) {
     if (data.userId) {
       window.UsersModule.removeUserFromList(data.userId);
       window.UsersModule.updateUserCount(window.UsersModule.getUsersList().length);
-      
+
       // Remove all streams from this user
       window.SFUConsumeModule?.removeAllUserStreams?.(data.userId);
     }
@@ -105,7 +112,7 @@ async function initSocket(roomId, userData) {
   socket.on('disconnect', () => {
     console.log('[SocketHandler] Disconnected from server');
   });
-  
+
   /**
    * NEW: Handle new stream event (with stream type)
    * This is the new event format that includes streamType
@@ -113,13 +120,13 @@ async function initSocket(roomId, userData) {
   socket.on('new-stream', async (data) => {
     const { roomId: eventRoomId, userId: streamUserId, streamType, streamKey, streamId } = data;
     console.log(`[SocketHandler] New stream: ${streamKey} (type: ${streamType}) from ${streamUserId}`);
-    
+
     // Don't consume if it's our own stream
     if (streamUserId === userId) {
       console.log('[SocketHandler] Skipping - this is my own stream');
       return;
     }
-    
+
     // Store metadata for this stream
     if (streamId) {
       window.SFUConsumeModule?.setStreamMetadata?.(streamId, {
@@ -127,7 +134,7 @@ async function initSocket(roomId, userData) {
         streamType
       });
     }
-    
+
     // Re-consume to get the new stream
     console.log(`[SocketHandler] Re-consuming to get new ${streamType} stream from ${streamUserId}...`);
     if (window.SFUConsumeModule && typeof window.SFUConsumeModule.requestConsumeCurrentStreams === 'function') {
@@ -139,7 +146,7 @@ async function initSocket(roomId, userData) {
       }
     }
   });
-  
+
   /**
    * NEW: Handle stream stopped event
    * Called when a specific stream type stops (e.g., user stops camera or screen share)
@@ -147,32 +154,32 @@ async function initSocket(roomId, userData) {
   socket.on('stream-stopped', (data) => {
     const { roomId: eventRoomId, userId: streamUserId, streamType, streamKey } = data;
     console.log(`[SocketHandler] Stream stopped: ${streamKey} (type: ${streamType}) from ${streamUserId}`);
-    
+
     // Don't process if it's our own stream
     if (streamUserId === userId) {
       return;
     }
-    
+
     // Handle the specific stream type stopping
     window.SFUConsumeModule?.handleStreamStopped?.(streamUserId, streamType);
   });
-  
+
   /**
    * LEGACY: Handle new-broadcaster event (backward compatibility)
    * This event doesn't include streamType, so we treat it as a generic stream
    */
   socket.on('new-broadcaster', async (data) => {
     console.log(`[SocketHandler] New broadcaster event received: ${data.userId} (my userId: ${userId})`);
-    
+
     // Don't consume if it's our own broadcast
     if (data.userId === userId) {
       console.log('[SocketHandler] Skipping - this is my own broadcast');
       return;
     }
-    
+
     // Store the broadcaster's userId for label display (legacy)
     window.SFUConsumeModule?.setBroadcasterUserId?.(data.userId);
-    
+
     console.log('[SocketHandler] Will re-consume to get new broadcaster stream...');
     if (window.SFUConsumeModule && typeof window.SFUConsumeModule.requestConsumeCurrentStreams === 'function') {
       try {
@@ -189,7 +196,7 @@ async function initSocket(roomId, userData) {
   // SFU: user mute status changed (for UI updates, audio continues via WebRTC)
   socket.on('user-mute-status', (data) => {
     console.log('[SocketHandler] User mute status:', data);
-    
+
     // Update user list UI to show mute status
     if (data.kind === 'audio') {
       window.UsersModule?.setAudioOn?.(data.userId, !data.muted);
@@ -210,14 +217,28 @@ async function initSocket(roomId, userData) {
     window.ButtonsModule?.showFloatingEmoji?.(data.emoji);
   });
 
+  // -----------------------------------------------------------------------
+  // Recording sync events — broadcast to ALL clients in the room
+  // -----------------------------------------------------------------------
+
+  socket.on('recording-started', (data) => {
+    console.log('[SocketHandler] Recording started:', data);
+    window.RecordingModule?.onRecordingStarted?.();
+  });
+
+  socket.on('recording-stopped', (data) => {
+    console.log('[SocketHandler] Recording stopped:', data);
+    window.RecordingModule?.onRecordingStopped?.();
+  });
+
   // Handle request to stop screen share from another user
   socket.on('stop-screenshare-request', (data) => {
     console.log('[SocketHandler] Stop screenshare request:', data);
-    
+
     // Only respond if we're the target user
     if (data.targetUserId === userId) {
       console.log('[SocketHandler] Received request to stop screen share');
-      
+
       // Check if we're actually screen sharing, then stop
       if (window.MediaModule?.isScreenSharing?.()) {
         window.MediaModule.stopScreenShare();
@@ -232,21 +253,21 @@ async function initSocket(roomId, userData) {
    */
   socket.on('broadcaster-left', (data) => {
     console.log('[SocketHandler] Broadcaster left:', data);
-    
+
     // Don't process if it's our own broadcast
     if (data.userId === userId) {
       return;
     }
-    
+
     // Remove all streams from this user (legacy behavior)
     window.SFUConsumeModule?.removeAllUserStreams?.(data.userId);
   });
-  
+
   // Initialize chat module
   if (window.ChatModule) {
     window.ChatModule.init(socket, userId, roomId);
   }
-  
+
   return socket;
 }
 
@@ -261,12 +282,12 @@ function disconnectOnLeave() {
           roomId: currentRoomId,
           userId: userId
         });
-        
+
         // Try to send via beacon API (more reliable for page unload)
         if (navigator.sendBeacon) {
           navigator.sendBeacon(`${getAPIURL()}/users/leave`, data);
         }
-        
+
         // Also try socket emit (may not complete, but server will handle via disconnect)
         socket.emit('leave-room', {
           roomId: currentRoomId,
@@ -276,7 +297,7 @@ function disconnectOnLeave() {
         console.error('Error sending leave notification:', error);
       }
     }
-    
+
     // Disconnect socket (server will handle cleanup via disconnect event)
     try {
       socket.disconnect();

@@ -31,12 +31,16 @@ async function startMeeting() {
   // Ensure server URL is determined
   await determineServerURL();
 
+  // Ensure we have a stable userId before creating the room so that
+  // the server can use it as hostId — allowing isHost() to work correctly.
+  const userId = ensureUserId();
+
   // Auto-save profile before entering a room (silent / best-effort)
   await saveUserProfile({ silent: true, requireName: false });
-  
+
   const meetingName = document.getElementById('meeting-name').value || 'Quick Meeting';
   const roomId = generateRoomId();
-  
+
   try {
     const response = await fetch(`${getAPIURL()}/rooms/create`, {
       method: 'POST',
@@ -45,7 +49,8 @@ async function startMeeting() {
       },
       body: JSON.stringify({
         roomId: roomId,
-        meetingName: meetingName
+        meetingName: meetingName,
+        hostId: userId          // tell the server who the host is
       })
     });
 
@@ -69,14 +74,14 @@ async function joinMeeting() {
 
   // Auto-save profile before entering a room (silent / best-effort)
   await saveUserProfile({ silent: true, requireName: false });
-  
+
   const roomCode = document.getElementById('room-code').value.trim().toUpperCase();
-  
+
   if (!roomCode) {
     alert('Please enter a room code');
     return;
   }
-  
+
   try {
     const response = await fetch(`${getAPIURL()}/rooms/join`, {
       method: 'POST',
@@ -105,7 +110,7 @@ async function joinMeeting() {
 
 function viewRecordings() {
   alert('View All Recordings - Feature coming soon!');
-  
+
   // Redirect to recordings page
   // window.location.href = 'pages/recordings.html';
 }
@@ -134,14 +139,14 @@ function generateRoomId() {
 function loadUserProfile() {
   const savedName = localStorage.getItem('userName');
   const savedProfileImage = localStorage.getItem('profileImage');
-  
+
   if (savedName) {
     const userNameInput = document.getElementById('user-name');
     if (userNameInput) {
       userNameInput.value = savedName;
     }
   }
-  
+
   if (savedProfileImage) {
     const profileImage = document.getElementById('profile-image');
     if (profileImage) {
@@ -155,7 +160,7 @@ async function saveUserProfile(options = {}) {
 
   const userName = document.getElementById('user-name')?.value.trim() || '';
   const profileImage = document.getElementById('profile-image')?.src;
-  
+
   // Always ensure we have a userId for the session
   const userId = ensureUserId();
 
@@ -166,13 +171,13 @@ async function saveUserProfile(options = {}) {
     }
     return;
   }
-  
+
   // Save to localStorage
   localStorage.setItem('userName', userName);
   if (profileImage && profileImage !== 'assets/icons/people.svg') {
     localStorage.setItem('profileImage', profileImage);
   }
-  
+
   // Send to server
   try {
     // Ensure server URL is determined (only needed for server save)
@@ -188,9 +193,9 @@ async function saveUserProfile(options = {}) {
         name: userName
       })
     });
-    
+
     const data = await response.json();
-    
+
     if (response.ok && data.success) {
       console.log('Profile saved successfully');
     } else {
@@ -216,15 +221,15 @@ function handleProfileUpload(event) {
       alert('Please select an image file');
       return;
     }
-    
+
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       alert('Image size should be less than 5MB');
       return;
     }
-    
+
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
       const profileImage = document.getElementById('profile-image');
       if (profileImage) {
         profileImage.src = e.target.result;
@@ -237,13 +242,13 @@ function handleProfileUpload(event) {
 }
 
 // Save user name when it changes
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   loadUserProfile();
-  
+
   const userNameInput = document.getElementById('user-name');
   if (userNameInput) {
     userNameInput.addEventListener('blur', () => saveUserProfile({ silent: true, requireName: false }));
-    userNameInput.addEventListener('keypress', function(e) {
+    userNameInput.addEventListener('keypress', function (e) {
       if (e.key === 'Enter') {
         saveUserProfile({ silent: true, requireName: false });
         this.blur();

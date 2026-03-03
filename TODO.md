@@ -4,7 +4,7 @@
 # Setting eg. sound out, mic in, noise cancel, background blur, disable emoji, defautl mute **
 
 ## Materials
-# Add flowchart of function ***
+# Add flowchart of function *
 # Draft test plan ***
 
 ## Testing & Security
@@ -18,3 +18,6 @@
 # APP for mobile to share their screen ***
 # Grouping js files
 # Optimize video stream resolution # for user student
+
+## QOL
+# Mic have some volume shows for client

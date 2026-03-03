@@ -25,9 +25,11 @@
         </button>
       </div>
       <div class="top-controls">
-        <button class="icon-btn" id="recording-btn" title="Stop Recording">
-          <img src="../assets/icons/recording-off.svg" alt="Recording">
-        </button>
+        <div class="rec-btn-group">
+          <button class="icon-btn" id="recording-btn" title="Start Recording">
+            <img src="../assets/icons/recording-off.svg" alt="Recording">
+          </button>
+        </div>
         <button class="icon-btn" id="people-btn" title="Participants">
           <img src="../assets/icons/people.svg" alt="People">
           <span class="user-count-badge" id="user-count-number">0</span>
@@ -162,6 +164,7 @@
   <script src="../js/sfu-consume.js"></script>
   <script src="../js/sfu-broadcast.js"></script>
   <script src="../js/socket-handler.js"></script>
+  <script src="../js/recording.js"></script>
   <script src="../js/buttons.js"></script>
   <script src="../js/chat.js"></script>
   <script src="../js/room.js"></script>

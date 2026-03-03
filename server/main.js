@@ -13,8 +13,10 @@ const PORT = process.env.PORT || 8443;
 
 // Import modules
 const apiRoutes = require('./api');
+const recordingRoutes = require('./routes/recording');
 const { initSocketEvents } = require('./socket-events');
 const { setIo: setSfuIo } = require('./sfu');
+const { setIo: setRecordingIo } = recordingRoutes;
 
 const app = express();
 
@@ -66,12 +68,16 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Mount API routes
 app.use('/api', apiRoutes);
+app.use('/api/recording', recordingRoutes);
 
 // Initialize Socket.io event handlers
 initSocketEvents(io);
 
 // Set Socket.io instance for SFU module
 setSfuIo(io);
+
+// Set Socket.io instance for recording routes
+setRecordingIo(io);
 
 // Initialize mediasoup workers and start server
 async function startServer() {

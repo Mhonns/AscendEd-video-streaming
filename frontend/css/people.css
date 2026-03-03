@@ -218,6 +218,14 @@ body.ui-hidden .users-sidebar {
   flex-shrink: 0;
 }
 
+/* Status icon used for mute and off-camera */
+.status-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  filter: invert(1) opacity(0.85);
+}
+
 /* Subtle glow on user cards that are currently sharing their screen */
 .user-item.has-screenshare {
   box-shadow: 0 0 0 1.5px rgba(56, 220, 190, 0.45);

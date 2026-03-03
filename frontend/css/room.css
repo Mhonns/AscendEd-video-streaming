@@ -595,3 +595,64 @@ body.show-cursor {
   box-shadow: none;
   transform: none;
 }
+
+
+
+
+/* ── Recording Banner — minimal pill shown to ALL participants ── */
+.rec-banner {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(12, 12, 16, 0.82);
+  border: 1px solid rgba(255, 55, 55, 0.4);
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 2px 12px rgba(255, 55, 55, 0.18);
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff3c3c;
+  flex-shrink: 0;
+  animation: rec-pulse 1.3s ease-in-out infinite;
+}
+
+.rec-banner-timer {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-family: 'SF Mono', 'Fira Mono', 'Consolas', monospace;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+@keyframes rec-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
+/* Rec button group in top bar */
+.rec-btn-group {
+  display: flex;
+  align-items: center;
+}

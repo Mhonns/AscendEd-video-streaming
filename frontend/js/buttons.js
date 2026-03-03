@@ -5,7 +5,6 @@
 
 let isMicOn = false;
 let isCameraOn = false;
-let isRecording = false; // Start with recording on
 let peopleListVisible = true; // Default to visible
 let isHandRaised = false;
 
@@ -32,7 +31,7 @@ function initMicrophoneButton() {
   const micIcon = micBtn ? micBtn.querySelector('img') : null;
 
   if (micBtn && micIcon) {
-    micBtn.addEventListener('click', async function() {
+    micBtn.addEventListener('click', async function () {
       if (!isMicOn) {
         // Request microphone permission and start mic
         const success = await window.MediaModule?.requestMicrophonePermission();
@@ -63,7 +62,7 @@ function initCameraButton() {
   const cameraIcon = cameraBtn ? cameraBtn.querySelector('img') : null;
 
   if (cameraBtn && cameraIcon) {
-    cameraBtn.addEventListener('click', async function() {
+    cameraBtn.addEventListener('click', async function () {
       if (!isCameraOn) {
         // Request camera permission and start camera
         const success = await window.MediaModule?.requestCameraPermission();
@@ -93,22 +92,24 @@ function initCameraButton() {
 function initRecordingButton() {
   const recordingBtn = document.getElementById('recording-btn');
   if (!recordingBtn) return;
-  
-  const recordingIcon = recordingBtn.querySelector('img');
-  recordingBtn.addEventListener('click', function() {
-    isRecording = !isRecording;
-    if (isRecording) {
-      recordingIcon.src = '../assets/icons/recording.svg';
-      this.title = 'Stop Recording';
-      this.classList.add('recording');
-      console.log('Recording started');
-      // TODO: Implement actual recording start
+
+  recordingBtn.addEventListener('click', async function () {
+    // Disable during async call to prevent double-clicks
+    recordingBtn.disabled = true;
+
+    if (!window.RecordingModule.isActive()) {
+      // Start recording — UI updates come via 'recording-started' socket event
+      const ok = await window.RecordingModule.startRecording();
+      if (!ok) {
+        // Re-enable on failure (success re-enables via onRecordingStarted)
+        recordingBtn.disabled = false;
+      }
     } else {
-      recordingIcon.src = '../assets/icons/recording-off.svg';
-      this.title = 'Start Recording';
-      this.classList.remove('recording');
-      console.log('Recording stopped');
-      // TODO: Implement actual recording stop
+      // Stop recording — UI updates come via 'recording-stopped' socket event
+      const ok = await window.RecordingModule.stopRecording();
+      if (!ok) {
+        recordingBtn.disabled = false;
+      }
     }
   });
 }
@@ -117,8 +118,8 @@ function initRecordingButton() {
 function initShareButton() {
   const shareBtn = document.getElementById('share-btn');
   if (!shareBtn) return;
-  
-  shareBtn.addEventListener('click', async function() {
+
+  shareBtn.addEventListener('click', async function () {
     console.log('Share screen clicked');
 
     if (!window.MediaModule?.startScreenShare || !window.MediaModule?.stopScreenShare) {
@@ -141,17 +142,17 @@ function initRaiseHandButton() {
   const raiseHandBtn = document.getElementById('raise-hand-btn');
   if (!raiseHandBtn) return;
 
-  raiseHandBtn.addEventListener('click', function() {
+  raiseHandBtn.addEventListener('click', function () {
     isHandRaised = !isHandRaised;
-    
+
     // Toggle button active state (yellow)
     this.classList.toggle('hand-raised', isHandRaised);
-    
+
     // Get socket and room info
     const socket = window.SocketHandler?.getSocket();
     const roomId = window.SocketHandler?.getCurrentRoomId();
     const userId = localStorage.getItem('userId');
-    
+
     if (socket && roomId && userId) {
       // Emit to server
       socket.emit('toggle-handsup', {
@@ -171,13 +172,13 @@ function initReactionButton() {
   if (!reactionBtn || !emojiPicker) return;
 
   // Toggle emoji picker on button click
-  reactionBtn.addEventListener('click', function(e) {
+  reactionBtn.addEventListener('click', function (e) {
     e.stopPropagation();
     emojiPicker.classList.toggle('show');
   });
 
   // Handle emoji selection
-  emojiPicker.addEventListener('click', function(e) {
+  emojiPicker.addEventListener('click', function (e) {
     const emojiItem = e.target.closest('.emoji-item');
     if (!emojiItem) return;
 
@@ -204,7 +205,7 @@ function initReactionButton() {
   });
 
   // Close picker when clicking outside
-  document.addEventListener('click', function(e) {
+  document.addEventListener('click', function (e) {
     if (!e.target.closest('.emoji-picker') && !e.target.closest('#reaction-btn')) {
       emojiPicker.classList.remove('show');
     }
@@ -241,7 +242,7 @@ function isMobileDevice() {
 function initPeopleButton() {
   const peopleBtn = document.getElementById('people-btn');
   if (!peopleBtn) return;
-  
+
   // Hide people list by default on mobile
   if (isMobileDevice()) {
     peopleListVisible = false;
@@ -253,10 +254,10 @@ function initPeopleButton() {
     peopleListVisible = true;
     peopleBtn.classList.add('active');
   }
-  
-  peopleBtn.addEventListener('click', function() {
+
+  peopleBtn.addEventListener('click', function () {
     peopleListVisible = !peopleListVisible;
-    
+
     if (peopleListVisible) {
       this.classList.add('active');
       if (usersSidebar) {
@@ -277,13 +278,13 @@ function initPeopleButton() {
 function initToggleUIButton() {
   const toggleUiBtn = document.getElementById('toggle-ui-btn');
   if (!toggleUiBtn) return;
-  
-  toggleUiBtn.addEventListener('click', function() {
+
+  toggleUiBtn.addEventListener('click', function () {
     const autoHideEnabled = window.UIControls.getAutoHideEnabled();
     const newState = !autoHideEnabled;
-    
+
     window.UIControls.setAutoHideEnabled(newState);
-    
+
     if (!newState) {
       // Pin controls - keep them visible
       this.classList.add('active');
@@ -294,7 +295,7 @@ function initToggleUIButton() {
       console.log('Controls unpinned - auto-hide enabled');
     }
   });
-  
+
   // Set toggle-ui button to active by default (pinned)
   toggleUiBtn.classList.add('active');
 }
@@ -305,8 +306,8 @@ function initFullscreenButton() {
   const fullscreenIcon = fullscreenBtn ? fullscreenBtn.querySelector('img') : null;
 
   function toggleFullscreen() {
-    if (!document.fullscreenElement && !document.webkitFullscreenElement && 
-        !document.mozFullScreenElement && !document.msFullscreenElement) {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement &&
+      !document.mozFullScreenElement && !document.msFullscreenElement) {
       // Enter fullscreen
       const element = document.documentElement;
       if (element.requestFullscreen) {
@@ -334,10 +335,10 @@ function initFullscreenButton() {
 
   function updateFullscreenIcon() {
     if (!fullscreenIcon) return;
-    
-    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
-                            document.mozFullScreenElement || document.msFullscreenElement);
-    
+
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement ||
+      document.mozFullScreenElement || document.msFullscreenElement);
+
     if (isFullscreen) {
       fullscreenIcon.src = '../assets/icons/fullscreen-exit.svg';
       fullscreenBtn.title = 'Exit Fullscreen';
@@ -349,13 +350,13 @@ function initFullscreenButton() {
 
   if (fullscreenBtn && fullscreenIcon) {
     fullscreenBtn.addEventListener('click', toggleFullscreen);
-    
+
     // Listen for fullscreen changes
     document.addEventListener('fullscreenchange', updateFullscreenIcon);
     document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
     document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
     document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
-    
+
     // Update icon on page load
     updateFullscreenIcon();
   }
@@ -365,7 +366,7 @@ function initFullscreenButton() {
 function initSettingsButton() {
   const settingsBtn = document.getElementById('settings-btn');
   if (settingsBtn) {
-    settingsBtn.addEventListener('click', function() {
+    settingsBtn.addEventListener('click', function () {
       // TODO: Implement settings functionality
       console.log('Settings clicked');
     });
@@ -376,18 +377,18 @@ function initSettingsButton() {
 function initLeaveButton() {
   const leaveBtn = document.getElementById('leave-btn');
   if (!leaveBtn) return;
-  
-  leaveBtn.addEventListener('click', function() {
+
+  leaveBtn.addEventListener('click', function () {
     console.log('Leaving meeting...');
-    
+
     // Stop all media streams
     window.MediaModule?.stopAllMedia();
-    
+
     // Notify server that user is leaving
     const socket = window.SocketHandler.getSocket();
     const currentRoomId = window.SocketHandler.getCurrentRoomId();
     const userId = window.SocketHandler.getUserId();
-    
+
     if (socket && currentRoomId && userId) {
       socket.emit('leave-room', {
         roomId: currentRoomId,
@@ -395,7 +396,7 @@ function initLeaveButton() {
       });
       socket.disconnect();
     }
-    
+
     // Redirect to landing page
     window.location.href = '../index.html';
   });
@@ -406,7 +407,7 @@ window.ButtonsModule = {
   initButtons,
   getMicState: () => isMicOn,
   getCameraState: () => isCameraOn,
-  getRecordingState: () => isRecording,
+  getRecordingState: () => window.RecordingModule?.isActive?.() ?? false,
   setMicState: (state) => { isMicOn = state; },
   setCameraState: (state) => { isCameraOn = state; },
   showFloatingEmoji

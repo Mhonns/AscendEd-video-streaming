@@ -108,6 +108,8 @@ async function initRoom() {
   // Initialize all button handlers
   window.ButtonsModule.initButtons();
 
+  // Initialize recording module (shows/hides the record button based on host status)
+  window.RecordingModule?.init?.(roomId, userId, data.room.hostId);
 
   const copyBtn = document.getElementById('copy-room-id-btn');
   if (copyBtn) {

@@ -129,6 +129,24 @@ function createUserItemElement(user) {
   const nameText = document.createTextNode(user.name || 'Anonymous');
   name.appendChild(nameText);
 
+  // Add audio/video icons (shown only when false initially)
+  if (!user.audioOn) {
+    const audioIcon = document.createElement('img');
+    audioIcon.className = 'status-icon audio-icon';
+    audioIcon.src = '../assets/icons/mic-off.svg';
+    audioIcon.alt = 'Muted';
+    audioIcon.title = 'Muted';
+    name.appendChild(audioIcon);
+  }
+  if (!user.videoOn) {
+    const videoIcon = document.createElement('img');
+    videoIcon.className = 'status-icon video-icon';
+    videoIcon.src = '../assets/icons/camera-off.svg';
+    videoIcon.alt = 'Camera Off';
+    videoIcon.title = 'Camera Off';
+    name.appendChild(videoIcon);
+  }
+
   // Create action buttons container
   const actions = document.createElement('div');
   actions.className = 'user-actions';
@@ -583,11 +601,71 @@ function updateScreenShareIcon(userId, sharing) {
 }
 
 function setVideoOn(userId, on) {
-  setUserFlag(userId, 'videoOn', on);
+  if (setUserFlag(userId, 'videoOn', on)) {
+    updateVideoIcon(userId, on);
+  }
 }
 
 function setAudioOn(userId, on) {
-  setUserFlag(userId, 'audioOn', on);
+  if (setUserFlag(userId, 'audioOn', on)) {
+    updateAudioIcon(userId, on);
+  }
+}
+
+function updateAudioIcon(userId, audioOn) {
+  const userItem = document.getElementById(`user-${userId}`);
+  if (!userItem) return;
+
+  const userName = userItem.querySelector('.user-name');
+  if (!userName) return;
+
+  let audioIcon = userName.querySelector('.audio-icon');
+
+  if (!audioOn) { // Show icon when audio is OFF (muted)
+    if (!audioIcon) {
+      audioIcon = document.createElement('img');
+      audioIcon.className = 'status-icon audio-icon';
+      audioIcon.src = '../assets/icons/mic-off.svg';
+      audioIcon.alt = 'Muted';
+      audioIcon.title = 'Muted';
+
+      const videoIcon = userName.querySelector('.video-icon');
+      if (videoIcon) {
+        userName.insertBefore(audioIcon, videoIcon);
+      } else {
+        userName.appendChild(audioIcon);
+      }
+    }
+  } else { // Hide icon when audio is ON
+    if (audioIcon) {
+      audioIcon.remove();
+    }
+  }
+}
+
+function updateVideoIcon(userId, videoOn) {
+  const userItem = document.getElementById(`user-${userId}`);
+  if (!userItem) return;
+
+  const userName = userItem.querySelector('.user-name');
+  if (!userName) return;
+
+  let videoIcon = userName.querySelector('.video-icon');
+
+  if (!videoOn) { // Show icon when camera is OFF
+    if (!videoIcon) {
+      videoIcon = document.createElement('img');
+      videoIcon.className = 'status-icon video-icon';
+      videoIcon.src = '../assets/icons/camera-off.svg';
+      videoIcon.alt = 'Camera Off';
+      videoIcon.title = 'Camera Off';
+      userName.appendChild(videoIcon);
+    }
+  } else { // Hide icon when camera is ON
+    if (videoIcon) {
+      videoIcon.remove();
+    }
+  }
 }
 
 function setHandsUp(userId, on) {
