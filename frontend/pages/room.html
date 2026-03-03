@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +10,7 @@
   <link rel="stylesheet" href="../css/people.css">
   <link rel="stylesheet" href="../css/chat.css">
 </head>
+
 <body>
   <!-- Main Room Wrapper -->
   <div class="room-wrapper" id="room-wrapper">
@@ -53,6 +55,7 @@
           <div class="placeholder-text">Welcome to the meeting!</div>
         </div>
       </div>
+
     </div>
 
     <!-- Bottom Controls -->
@@ -93,8 +96,10 @@
     <div class="chat-input-container">
       <input type="text" class="chat-input" id="chat-input" placeholder="Type a message..." maxlength="500">
       <button class="chat-send-btn" id="chat-send-btn" title="Send Message">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: invert(1);">
-          <path d="M1 1L17 9L1 17M17 9H1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"
+          style="filter: invert(1);">
+          <path d="M1 1L17 9L1 17M17 9H1" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
         </svg>
       </button>
     </div>
@@ -134,17 +139,19 @@
     <div class="name-modal-content">
       <div class="name-modal-icon">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="8" r="4" stroke="white" stroke-width="2"/>
-          <path d="M4 20C4 16.6863 7.13401 14 11 14H13C16.866 14 20 16.6863 20 20" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="12" cy="8" r="4" stroke="white" stroke-width="2" />
+          <path d="M4 20C4 16.6863 7.13401 14 11 14H13C16.866 14 20 16.6863 20 20" stroke="white" stroke-width="2"
+            stroke-linecap="round" />
         </svg>
       </div>
       <h2>What's your name?</h2>
       <p>Please enter your name to join the meeting</p>
-      <input type="text" class="name-input" id="name-input" placeholder="Enter your name" maxlength="50" autocomplete="off">
+      <input type="text" class="name-input" id="name-input" placeholder="Enter your name" maxlength="50"
+        autocomplete="off">
       <button class="name-submit-btn" id="name-submit-btn">Join Meeting</button>
     </div>
   </div>
-  
+
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 
   <script src="../js/config.js"></script>
@@ -159,4 +166,5 @@
   <script src="../js/chat.js"></script>
   <script src="../js/room.js"></script>
 </body>
+
 </html>

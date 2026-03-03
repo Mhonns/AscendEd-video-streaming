@@ -5,7 +5,6 @@
 
 ## Materials
 # Add flowchart of function ***
-# Update diagrams ***
 # Draft test plan ***
 
 ## Testing & Security
@@ -13,10 +12,7 @@
 # Load test try many web rtc connection DDoS and QA + Pent Test
 # Browser Test
 # Device Test
-
-## SFU Server
 # Sanitize User Request
-# Optimize ICE and STUN Server to fit situation
 
 ## SFU Client
 # APP for mobile to share their screen ***

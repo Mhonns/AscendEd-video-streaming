@@ -15,8 +15,9 @@ let consumerPeer = null;
 // Map streamId -> metadata { oderId (the broadcaster's userId), streamType }
 const streamMetadataMap = new Map();
 
-// Track current screen share broadcaster
-let currentScreenBroadcasterId = null;
+// Registry of all active screen shares: [{ oderId, stream }] ordered by arrival
+const activeScreenShares = [];
+let currentScreenShareIndex = 0;
 
 async function postJson(url, body) {
   const res = await fetch(url, {
@@ -66,10 +67,12 @@ async function requestConsumeCurrentStreams(roomId, userId) {
 
   // Close existing consumer peer if any
   if (consumerPeer) {
-    try { consumerPeer.close(); } catch (_) {}
+    try { consumerPeer.close(); } catch (_) { }
   }
 
-  // Clear previous metadata
+  // Clear stream metadata (will be repopulated from server answer).
+  // Do NOT wipe activeScreenShares here — we reconcile it after we get the
+  // server answer so existing entries survive mid-session re-consumes.
   clearStreamMetadata();
 
   const peer = new RTCPeerConnection({ iceServers: DEFAULT_ICE_SERVERS });
@@ -80,12 +83,12 @@ async function requestConsumeCurrentStreams(roomId, userId) {
     const track = event.track;
     const stream = event.streams[0];
     const streamId = stream?.id;
-    
+
     console.log(`[SFUConsumeModule] Received track: kind=${track.kind}, streamId=${streamId}`);
-    
+
     // Look up metadata for this stream
     const metadata = getStreamMetadata(streamId);
-    
+
     if (metadata) {
       handleTrackWithMetadata(track, stream, metadata);
     } else {
@@ -95,11 +98,56 @@ async function requestConsumeCurrentStreams(roomId, userId) {
     }
   };
 
-  // Add multiple transceivers for receiving different stream types
-  // We may receive: audio (main), video (screen), video (camera) from multiple users
-  peer.addTransceiver('audio', { direction: 'recvonly' });
-  peer.addTransceiver('video', { direction: 'recvonly' });
-  peer.addTransceiver('video', { direction: 'recvonly' }); // Second video for camera
+  // Auto-reconnect: when the consumer peer drops, re-consume after a short delay
+  peer.oniceconnectionstatechange = () => {
+    const state = peer.iceConnectionState;
+    console.log(`[SFUConsumeModule] ICE connection state: ${state}`);
+
+    if (state === 'disconnected' || state === 'failed') {
+      console.warn(`[SFUConsumeModule] Consumer peer ${state} — scheduling re-consume in 2s`);
+      setTimeout(() => {
+        // Only retry if this peer is still the active one (not already replaced)
+        if (consumerPeer !== peer) return;
+        console.log('[SFUConsumeModule] Auto re-consuming after connection drop...');
+        requestConsumeCurrentStreams(roomId, userId).catch(err => {
+          console.error('[SFUConsumeModule] Auto re-consume failed:', err);
+        });
+      }, 2000);
+    }
+  };
+
+  // Dynamically size transceivers based on how many users are in the room.
+  // Per user: up to 1 audio stream + 1 camera video + 1 screen video.
+  // We add a headroom of +1 per kind so a user joining mid-call still gets slots.
+  // Unused transceiver slots are harmless inactive m= sections in the SDP.
+  {
+    // Try to get the real user count from the server; fall back to the local list.
+    let userCount = 2; // safe minimum
+    try {
+      const infoUrl = `${serverProtocol}://${serverUrl}:${serverPort}/room-streams/${roomId}`;
+      const info = await fetch(infoUrl).then(r => r.ok ? r.json() : null).catch(() => null);
+      if (info?.userCount) {
+        userCount = info.userCount;
+      } else {
+        userCount = Math.max(window.UsersModule?.getUsersList?.()?.length ?? 2, 2);
+      }
+    } catch (_) {
+      userCount = Math.max(window.UsersModule?.getUsersList?.()?.length ?? 2, 2);
+    }
+
+    // slots = N users × 2 video (screen + camera) and N audio, with +1 headroom each
+    const videoSlots = Math.max((userCount + 1) * 2, 4);
+    const audioSlots = Math.max(userCount + 1, 2);
+
+    console.log(`[SFUConsumeModule] Provisioning ${audioSlots} audio + ${videoSlots} video transceivers for ${userCount} user(s)`);
+
+    for (let i = 0; i < audioSlots; i++) {
+      peer.addTransceiver('audio', { direction: 'recvonly' });
+    }
+    for (let i = 0; i < videoSlots; i++) {
+      peer.addTransceiver('video', { direction: 'recvonly' });
+    }
+  }
 
   const offer = await peer.createOffer();
   await peer.setLocalDescription(offer);
@@ -112,11 +160,11 @@ async function requestConsumeCurrentStreams(roomId, userId) {
 
   const url = `${serverProtocol}://${serverUrl}:${serverPort}/consumer`;
   const answerPayload = await postJson(url, payload);
-  
+
   if (!answerPayload || !answerPayload.sdp) {
     throw new Error('[SFUConsumeModule] Invalid /consumer response');
   }
-  
+
   // Store stream metadata from server response
   if (answerPayload.streamMetadata && Array.isArray(answerPayload.streamMetadata)) {
     answerPayload.streamMetadata.forEach(meta => {
@@ -125,11 +173,27 @@ async function requestConsumeCurrentStreams(roomId, userId) {
         streamType: meta.streamType
       });
     });
+
+    // Reconcile activeScreenShares — remove users no longer sharing,
+    // but keep valid entries so switching still works mid-session.
+    const expectedScreenUserIds = new Set(
+      answerPayload.streamMetadata
+        .filter(m => m.streamType === 'screen')
+        .map(m => m.oderId)
+    );
+    for (let i = activeScreenShares.length - 1; i >= 0; i--) {
+      if (!expectedScreenUserIds.has(activeScreenShares[i].oderId)) {
+        const removed = activeScreenShares.splice(i, 1)[0];
+        window.UsersModule?.setScreenShareOn?.(removed.oderId, false);
+        console.log(`[SFUConsumeModule] Pruned stale screen share for ${removed.oderId}`);
+      }
+    }
+    currentScreenShareIndex = Math.max(0, Math.min(currentScreenShareIndex, activeScreenShares.length - 1));
   }
-  
+
   await peer.setRemoteDescription(new RTCSessionDescription(answerPayload.sdp));
   console.log('[SFUConsumeModule] Consumer SDP exchange completed');
-  
+
   return peer;
 }
 
@@ -138,31 +202,41 @@ async function requestConsumeCurrentStreams(roomId, userId) {
  */
 function handleTrackWithMetadata(track, stream, metadata) {
   const { oderId, streamType } = metadata;
-  
+
   console.log(`[SFUConsumeModule] Handling ${streamType} track from ${oderId}`);
-  
+
   switch (streamType) {
     case 'main':
-      // Audio stream
+      // Audio-only stream
       if (track.kind === 'audio') {
         playRemoteAudio(stream, oderId);
       }
       break;
-      
+
+    case 'media':
+      // Combined audio + camera stream from server
+      // Route audio to audio element, video to sidebar
+      if (track.kind === 'audio') {
+        playRemoteAudio(stream, oderId);
+      } else if (track.kind === 'video') {
+        displayRemoteCameraInSidebar(stream, oderId);
+      }
+      break;
+
     case 'screen':
-      // Screen share video
+      // Screen share video → center grid
       if (track.kind === 'video') {
         displayRemoteScreenShare(stream, oderId);
       }
       break;
-      
+
     case 'camera':
-      // Camera video for sidebar
+      // Standalone camera video → sidebar
       if (track.kind === 'video') {
         displayRemoteCameraInSidebar(stream, oderId);
       }
       break;
-      
+
     default:
       console.warn(`[SFUConsumeModule] Unknown stream type: ${streamType}`);
       handleTrackFallback(track, stream);
@@ -170,14 +244,15 @@ function handleTrackWithMetadata(track, stream, metadata) {
 }
 
 /**
- * Fallback handler when no metadata is available
+ * Fallback handler when no metadata is available.
+ * Audio is still played (no harm). Unknown video is dropped — we can't
+ * know if it's camera or screen, and guessing wrong puts camera in center.
  */
 function handleTrackFallback(track, stream) {
   if (track.kind === 'audio') {
     playRemoteAudio(stream, null);
   } else if (track.kind === 'video') {
-    // Default to screen share display
-    displayRemoteScreenShare(stream, null);
+    console.warn('[SFUConsumeModule] Dropping unknown video track (no metadata). It will be re-consumed when a new-stream event fires.');
   }
 }
 
@@ -187,9 +262,9 @@ function handleTrackFallback(track, stream) {
 function playRemoteAudio(stream, oderId) {
   const streamId = stream.id;
   const audioId = oderId ? `remote-audio-${oderId}` : `remote-audio-${streamId}`;
-  
+
   let audioEl = document.getElementById(audioId);
-  
+
   if (!audioEl) {
     audioEl = document.createElement('audio');
     audioEl.id = audioId;
@@ -197,32 +272,67 @@ function playRemoteAudio(stream, oderId) {
     audioEl.dataset.oderId = oderId || '';
     document.body.appendChild(audioEl);
   }
-  
+
   // Clear old data first
   audioEl.pause();
   audioEl.srcObject = null;
   audioEl.load();
-  
+
   // Set new stream
   audioEl.srcObject = stream;
   audioEl.play().catch(err => console.warn('[SFUConsumeModule] Audio play failed:', err));
-  
+
   console.log(`[SFUConsumeModule] Playing audio from ${oderId || streamId}`);
 }
 
 /**
- * Display remote screen share in main video grid
+ * Display remote screen share — register it and render the current one.
  */
 function displayRemoteScreenShare(stream, oderId) {
+  if (!oderId) return;
+
+  // Update existing entry or push new one
+  const existing = activeScreenShares.findIndex(s => s.oderId === oderId);
+  if (existing !== -1) {
+    activeScreenShares[existing].stream = stream;
+  } else {
+    activeScreenShares.push({ oderId, stream });
+    // Auto-jump to the newly arrived share (highest-priority = latest)
+    currentScreenShareIndex = activeScreenShares.length - 1;
+  }
+
+  renderScreenShare();
+  // Update user list badge
+  window.UsersModule?.setScreenShareOn?.(oderId, true);
+  console.log(`[SFUConsumeModule] Registered screen share from ${oderId} (total: ${activeScreenShares.length})`);
+}
+
+/**
+ * Render the screen share at currentScreenShareIndex into the center grid.
+ */
+function renderScreenShare() {
+  console.log('[SFUConsumeModule] Rendering screen share');
   const videoGrid = document.getElementById('video-grid');
   const placeholder = document.getElementById('video-placeholder');
   if (!videoGrid) return;
 
-  if (placeholder) {
-    placeholder.classList.add('hidden');
+  if (activeScreenShares.length === 0) {
+    // No shares left — tear down the container
+    const container = document.getElementById('main-video-container');
+    if (container && !container.classList.contains('screenshare')) {
+      container.remove();
+    }
+    if (placeholder) placeholder.classList.remove('hidden');
+    updateScreenNavUI();
+    updateVideoGridLayout();
+    return;
   }
 
-  currentScreenBroadcasterId = oderId;
+  // Clamp index
+  currentScreenShareIndex = Math.max(0, Math.min(currentScreenShareIndex, activeScreenShares.length - 1));
+  const { oderId, stream } = activeScreenShares[currentScreenShareIndex];
+
+  if (placeholder) placeholder.classList.add('hidden');
 
   // Get or create the main-video-container
   let container = document.getElementById('main-video-container');
@@ -230,40 +340,53 @@ function displayRemoteScreenShare(stream, oderId) {
     container = document.createElement('div');
     container.id = 'main-video-container';
     container.className = 'video-item remote screen';
-    
     const label = document.createElement('div');
     label.className = 'video-label';
-    label.textContent = getBroadcasterName(oderId) + ' (Screen)';
-
     container.appendChild(label);
     videoGrid.appendChild(container);
   }
-
   container.classList.add('remote', 'screen');
-  container.dataset.oderId = oderId || '';
+  container.dataset.oderId = oderId;
 
   // Update label
   const label = container.querySelector('.video-label');
-  if (label) {
-    label.textContent = getBroadcasterName(oderId) + ' (Screen)';
-  }
+  if (label) label.textContent = getBroadcasterName(oderId) + ' (Screen)';
 
-  // Create or get the remote-video element
+  // Create or get video element
   let videoEl = document.getElementById('remote-video');
   if (!videoEl) {
     videoEl = document.createElement('video');
     videoEl.id = 'remote-video';
     videoEl.autoplay = true;
     videoEl.playsInline = true;
-    const labelEl = container.querySelector('.video-label');
-    container.insertBefore(videoEl, labelEl);
+    container.insertBefore(videoEl, container.querySelector('.video-label'));
   }
-
   videoEl.srcObject = stream;
-  console.log(`[SFUConsumeModule] Displaying screen share from ${oderId}`);
-  
-  // Update layout
+
   updateVideoGridLayout();
+}
+
+
+/**
+ * Navigate to next (+1) or previous (-1) screen share.
+ */
+function navigateScreenShare(direction) {
+  currentScreenShareIndex = Math.max(0, Math.min(
+    currentScreenShareIndex + direction,
+    activeScreenShares.length - 1
+  ));
+  renderScreenShare();
+}
+
+/**
+ * Jump directly to a specific user's screen share (called from sidebar click).
+ */
+function jumpToScreenShare(oderId) {
+  const idx = activeScreenShares.findIndex(s => s.oderId === oderId);
+  if (idx !== -1) {
+    currentScreenShareIndex = idx;
+    renderScreenShare();
+  }
 }
 
 /**
@@ -274,7 +397,7 @@ function displayRemoteCameraInSidebar(stream, oderId) {
     console.warn('[SFUConsumeModule] Cannot display camera without oderId');
     return;
   }
-  
+
   // Find the user-item element for this user
   const userItem = document.querySelector(`.user-item[data-user-id="${oderId}"]`);
   if (!userItem) {
@@ -283,13 +406,13 @@ function displayRemoteCameraInSidebar(stream, oderId) {
     pendingCameraStreams.set(oderId, stream);
     return;
   }
-  
+
   // Find or create the user-media element
   let userMedia = userItem.querySelector('.user-media');
   if (!userMedia) {
     userMedia = document.createElement('div');
     userMedia.className = 'user-media';
-    
+
     // Insert before user-info or at the start
     const userInfo = userItem.querySelector('.user-info');
     if (userInfo) {
@@ -298,7 +421,7 @@ function displayRemoteCameraInSidebar(stream, oderId) {
       userItem.prepend(userMedia);
     }
   }
-  
+
   // Create or get video element
   let videoEl = userMedia.querySelector('video');
   if (!videoEl) {
@@ -309,19 +432,19 @@ function displayRemoteCameraInSidebar(stream, oderId) {
     videoEl.className = 'user-camera-video';
     userMedia.appendChild(videoEl);
   }
-  
+
   videoEl.srcObject = stream;
-  
+
   // Hide avatar, show video
   const avatar = userItem.querySelector('.user-avatar');
   if (avatar) {
     avatar.style.display = 'none';
   }
   userMedia.style.display = 'block';
-  
+
   // Mark user as having camera on
   window.UsersModule?.setVideoOn?.(oderId, true);
-  
+
   console.log(`[SFUConsumeModule] Displaying camera in sidebar for ${oderId}`);
 }
 
@@ -346,7 +469,7 @@ function applyPendingCameraStream(oderId) {
 function removeRemoteCameraFromSidebar(oderId) {
   const userItem = document.querySelector(`.user-item[data-user-id="${oderId}"]`);
   if (!userItem) return;
-  
+
   const userMedia = userItem.querySelector('.user-media');
   if (userMedia) {
     const videoEl = userMedia.querySelector('video');
@@ -354,21 +477,21 @@ function removeRemoteCameraFromSidebar(oderId) {
       try {
         videoEl.pause();
         videoEl.srcObject = null;
-      } catch (_) {}
+      } catch (_) { }
       videoEl.remove();
     }
     userMedia.style.display = 'none';
   }
-  
+
   // Show avatar again
   const avatar = userItem.querySelector('.user-avatar');
   if (avatar) {
     avatar.style.display = '';
   }
-  
+
   // Clear pending stream if any
   pendingCameraStreams.delete(oderId);
-  
+
   console.log(`[SFUConsumeModule] Removed camera from sidebar for ${oderId}`);
 }
 
@@ -377,50 +500,34 @@ function removeRemoteCameraFromSidebar(oderId) {
  */
 function getBroadcasterName(oderId) {
   if (!oderId) return 'Remote';
-  
+
   const users = window.UsersModule?.getUsersList?.() || [];
-  const broadcaster = users.find(u => u.oderId === oderId);
-  return broadcaster?.name || 'Remote';
+  const broadcaster = users.find(u => u.userId === oderId);
+  return broadcaster?.name || oderId;
 }
 
 /**
- * Remove remote screen share when broadcaster stops sharing
+ * Remove a user's screen share from the registry and re-render.
  */
 function removeRemoteScreenShare(oderId) {
-  // Only remove if it matches the current screen broadcaster
-  if (oderId && currentScreenBroadcasterId && oderId !== currentScreenBroadcasterId) {
-    return;
+  const idx = oderId
+    ? activeScreenShares.findIndex(s => s.oderId === oderId)
+    : activeScreenShares.length - 1; // null = remove current
+
+  if (idx === -1) return;
+
+  activeScreenShares.splice(idx, 1);
+
+  // Notify UsersModule to clear the badge (guard: oderId may be null for legacy call)
+  if (oderId) window.UsersModule?.setScreenShareOn?.(oderId, false);
+
+  // Keep index in bounds after removal
+  if (currentScreenShareIndex >= activeScreenShares.length) {
+    currentScreenShareIndex = Math.max(0, activeScreenShares.length - 1);
   }
-  
-  const videoEl = document.getElementById('remote-video');
-  if (videoEl) {
-    try {
-      videoEl.pause();
-      videoEl.srcObject = null;
-    } catch (_) {}
-    videoEl.remove();
-  }
-  
-  // Clean up the container if it's only for remote video (not local screen share)
-  const container = document.getElementById('main-video-container');
-  if (container && !container.classList.contains('screenshare')) {
-    container.remove();
-  }
-  
-  // Show placeholder if no videos left
-  const videoGrid = document.getElementById('video-grid');
-  const placeholder = document.getElementById('video-placeholder');
-  if (videoGrid && placeholder) {
-    const remaining = videoGrid.querySelectorAll('.video-item');
-    if (remaining.length === 0) {
-      placeholder.classList.remove('hidden');
-    }
-  }
-  
-  currentScreenBroadcasterId = null;
-  
-  console.log(`[SFUConsumeModule] Remote screen share removed`);
-  updateVideoGridLayout();
+
+  console.log(`[SFUConsumeModule] Removed screen share for ${oderId} (remaining: ${activeScreenShares.length})`);
+  renderScreenShare();
 }
 
 /**
@@ -432,7 +539,7 @@ function removeRemoteAudio(oderId) {
     try {
       audioEl.pause();
       audioEl.srcObject = null;
-    } catch (_) {}
+    } catch (_) { }
     audioEl.remove();
   }
   console.log(`[SFUConsumeModule] Remote audio removed for ${oderId}`);
@@ -443,10 +550,15 @@ function removeRemoteAudio(oderId) {
  */
 function handleStreamStopped(oderId, streamType) {
   console.log(`[SFUConsumeModule] Stream stopped: ${oderId} ${streamType}`);
-  
+
   switch (streamType) {
     case 'main':
       removeRemoteAudio(oderId);
+      break;
+    case 'media':
+      // Combined stream stopped — remove both audio and camera sidebar
+      removeRemoteAudio(oderId);
+      removeRemoteCameraFromSidebar(oderId);
       break;
     case 'screen':
       removeRemoteScreenShare(oderId);
@@ -464,7 +576,7 @@ function removeAllUserStreams(oderId) {
   removeRemoteAudio(oderId);
   removeRemoteScreenShare(oderId);
   removeRemoteCameraFromSidebar(oderId);
-  
+
   // Clear from metadata map
   streamMetadataMap.forEach((meta, streamId) => {
     if (meta.oderId === oderId) {
@@ -478,13 +590,13 @@ function removeAllUserStreams(oderId) {
  */
 function removeRemoteVideo() {
   removeRemoteScreenShare(null);
-  
+
   // Also remove all audio
   document.querySelectorAll('audio[id^="remote-audio-"]').forEach(audioEl => {
     try {
       audioEl.pause();
       audioEl.srcObject = null;
-    } catch (_) {}
+    } catch (_) { }
     audioEl.remove();
   });
 }
@@ -505,7 +617,7 @@ function updateVideoGridLayout() {
  * Legacy function - set broadcaster userId (for backward compatibility)
  */
 function setBroadcasterUserId(oderId) {
-  currentScreenBroadcasterId = oderId;
+  // No-op: replaced by activeScreenShares registry
 }
 
 /**
@@ -514,10 +626,11 @@ function setBroadcasterUserId(oderId) {
 function updateRemoteVideoLabel() {
   const container = document.getElementById('main-video-container');
   if (!container) return;
-  
+
   const label = container.querySelector('.video-label');
   if (label && container.classList.contains('remote')) {
-    const name = getBroadcasterName(currentScreenBroadcasterId);
+    const current = activeScreenShares[currentScreenShareIndex];
+    const name = current ? getBroadcasterName(current.oderId) : 'Remote';
     if (container.classList.contains('screen')) {
       label.textContent = name + ' (Screen)';
     } else {
@@ -537,28 +650,30 @@ window.SFUConsumeModule = {
   // Main functions
   requestConsumeCurrentStreams,
   getConsumerPeer,
-  
+
   // Stream metadata
   setStreamMetadata,
   getStreamMetadata,
-  
+
   // Stream type handlers
   handleStreamStopped,
   removeAllUserStreams,
-  
+
   // Camera in sidebar
   displayRemoteCameraInSidebar,
   removeRemoteCameraFromSidebar,
   applyPendingCameraStream,
-  
+
   // Screen share in main grid
   displayRemoteScreenShare,
   removeRemoteScreenShare,
-  
+  navigateScreenShare,
+  jumpToScreenShare,
+
   // Audio
   playRemoteAudio,
   removeRemoteAudio,
-  
+
   // Legacy functions
   setBroadcasterUserId,
   updateRemoteVideoLabel,

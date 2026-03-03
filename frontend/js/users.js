@@ -106,7 +106,7 @@ function createUserItemElement(user) {
 
     // Best-effort play (can fail without gesture in some browsers)
     setTimeout(() => {
-      videoPreview.play?.().catch?.(() => {});
+      videoPreview.play?.().catch?.(() => { });
     }, 0);
 
     mediaWrap.appendChild(videoPreview);
@@ -116,7 +116,7 @@ function createUserItemElement(user) {
 
   const name = document.createElement('div');
   name.className = 'user-name';
-  
+
   // Add hand icon if user has hands up
   if (user.handsUp) {
     const handIcon = document.createElement('img');
@@ -125,7 +125,7 @@ function createUserItemElement(user) {
     handIcon.alt = 'Hand raised';
     name.appendChild(handIcon);
   }
-  
+
   const nameText = document.createTextNode(user.name || 'Anonymous');
   name.appendChild(nameText);
 
@@ -168,7 +168,7 @@ function createUserItemElement(user) {
   actions.appendChild(pinBtn);
   actions.appendChild(kickBtn);
 
-  // Click selects this user for the main screen (unless deselected)
+  // Click selects this user for the main screen
   userItem.onclick = () => {
     // Close other active items
     document.querySelectorAll('.user-item.active').forEach(item => {
@@ -198,7 +198,7 @@ function renderUsersList() {
 
   const usersSorted = getUsersSorted();
   const currentUserIds = new Set(usersSorted.map(u => u.userId));
-  
+
   // Remove elements for users no longer in the list
   const existingItems = usersListElement.querySelectorAll('.user-item');
   existingItems.forEach(item => {
@@ -207,11 +207,11 @@ function renderUsersList() {
       item.remove();
     }
   });
-  
+
   // Reorder only if needed
   usersSorted.forEach((u, targetIndex) => {
     let userItem = document.getElementById(`user-${u.userId}`);
-    
+
     if (!userItem) {
       // Create new element
       userItem = createUserItemElement(u);
@@ -226,7 +226,7 @@ function renderUsersList() {
       // Update existing element
       userItem.dataset.priority = String(u.priority || 0);
       updateLocalCameraPreview(userItem, u.userId);
-      
+
       // Only move if position is wrong
       const currentIndex = Array.from(usersListElement.children).indexOf(userItem);
       if (currentIndex !== targetIndex) {
@@ -331,19 +331,19 @@ function displayUsers(users) {
 function updateLocalCameraPreview(userItem, userId) {
   const isLocalUser = userId === getLocalUserId();
   if (!isLocalUser) return;
-  
+
   const localStream = window.MediaModule?.getLocalStream?.();
   const localVideoTrack = localStream?.getVideoTracks?.()?.[0];
   const shouldShowCameraPreview = !!(localVideoTrack && localVideoTrack.enabled);
-  
+
   const mediaWrap = userItem.querySelector('.user-media');
   const avatar = userItem.querySelector('.user-avatar');
   let videoPreview = mediaWrap?.querySelector('.user-video-preview');
-  
+
   if (shouldShowCameraPreview) {
     // Show camera preview, hide avatar
     if (avatar) avatar.style.display = 'none';
-    
+
     if (!videoPreview && mediaWrap) {
       videoPreview = document.createElement('video');
       videoPreview.className = 'user-video-preview';
@@ -352,10 +352,10 @@ function updateLocalCameraPreview(userItem, userId) {
       videoPreview.playsInline = true;
       mediaWrap.insertBefore(videoPreview, avatar);
     }
-    
+
     if (videoPreview && videoPreview.srcObject !== localStream) {
       videoPreview.srcObject = localStream;
-      videoPreview.play?.().catch?.(() => {});
+      videoPreview.play?.().catch?.(() => { });
     }
   } else {
     // Hide camera preview, show avatar (profile image)
@@ -480,17 +480,17 @@ const PRIORITY_WEIGHTS = {
 function recalculatePriority(userId) {
   const u = userStateById.get(userId);
   if (!u) return;
-  
-  u.priority = 
+
+  u.priority =
     (u.pinned ? PRIORITY_WEIGHTS.pinned : 0) +
     (u.handsUp ? PRIORITY_WEIGHTS.handsUp : 0) +
     (u.screenShareOn ? PRIORITY_WEIGHTS.screenShareOn : 0) +
     (u.videoOn ? PRIORITY_WEIGHTS.videoOn : 0) +
     (u.audioOn ? PRIORITY_WEIGHTS.audioOn : 0);
-  
+
   const el = document.getElementById(`user-${userId}`);
   if (el) el.dataset.priority = String(u.priority);
-  
+
   reorderUserItemsAndVideos();
 }
 
@@ -513,6 +513,73 @@ function setPinned(userId, pinned) {
 
 function setScreenShareOn(userId, on) {
   setUserFlag(userId, 'screenShareOn', on);
+  updateScreenShareIcon(userId, on);
+}
+
+/**
+ * Show/hide the screen-share icon badge inside the user-name pill
+ * and inject/remove a "View Screen" button in the actions row.
+ */
+function updateScreenShareIcon(userId, sharing) {
+  const userItem = document.getElementById(`user-${userId}`);
+  if (!userItem) return;
+
+  const userName = userItem.querySelector('.user-name');
+  if (!userName) return;
+
+  // --- name-pill icon ---
+  let screenIcon = userName.querySelector('.screen-share-icon');
+  if (sharing) {
+    if (!screenIcon) {
+      screenIcon = document.createElement('img');
+      screenIcon.className = 'screen-share-icon';
+      screenIcon.src = '../assets/icons/screen.svg';
+      screenIcon.alt = 'Screen sharing';
+      screenIcon.title = 'Screen sharing';
+      const handIcon = userName.querySelector('.hand-icon');
+      if (handIcon) {
+        handIcon.after(screenIcon);
+      } else {
+        userName.insertBefore(screenIcon, userName.firstChild);
+      }
+    }
+    userItem.classList.add('has-screenshare');
+  } else {
+    if (screenIcon) screenIcon.remove();
+    userItem.classList.remove('has-screenshare');
+  }
+
+  // --- "View Screen" action button ---
+  const actions = userItem.querySelector('.user-actions');
+  if (!actions) return;
+
+  let viewBtn = actions.querySelector('.view-screen-btn');
+  if (sharing) {
+    if (!viewBtn) {
+      viewBtn = document.createElement('button');
+      viewBtn.className = 'user-action-btn view-screen-btn';
+      viewBtn.title = 'View Screen';
+      viewBtn.innerHTML = `<img src="../assets/icons/screen.svg" alt="View Screen">`;
+      viewBtn.onclick = (e) => {
+        e.stopPropagation();
+        const localUserId = localStorage.getItem('userId');
+        if (userId === localUserId) {
+          // Local user: render their own screen share preview directly
+          const stream = window.MediaModule?.getScreenStream?.();
+          if (stream) {
+            window.MediaModule?.showScreenSharePreview?.(stream);
+          }
+        } else {
+          // Remote user: switch to their share in the main grid
+          window.SFUConsumeModule?.jumpToScreenShare?.(userId);
+        }
+      };
+      // Insert as first action button
+      actions.insertBefore(viewBtn, actions.firstChild);
+    }
+  } else {
+    if (viewBtn) viewBtn.remove();
+  }
 }
 
 function setVideoOn(userId, on) {
@@ -532,12 +599,12 @@ function setHandsUp(userId, on) {
 function updateHandIcon(userId, handsUp) {
   const userItem = document.getElementById(`user-${userId}`);
   if (!userItem) return;
-  
+
   const userName = userItem.querySelector('.user-name');
   if (!userName) return;
-  
+
   let handIcon = userName.querySelector('.hand-icon');
-  
+
   if (handsUp) {
     if (!handIcon) {
       handIcon = document.createElement('img');

@@ -136,6 +136,10 @@ body.ui-hidden .users-sidebar {
   background: rgba(76, 175, 80, 0.5);
 }
 
+.user-action-btn.view-screen-btn:hover {
+  background: rgba(56, 220, 190, 0.35);
+}
+
 .user-action-btn img {
   width: 16px;
   height: 16px;
@@ -174,6 +178,7 @@ body.ui-hidden .users-sidebar {
   height: 100%;
   object-fit: cover;
   display: block;
+  transform: scaleX(-1);
 }
 
 .user-name {
@@ -202,6 +207,20 @@ body.ui-hidden .users-sidebar {
   height: 14px;
   filter: invert(78%) sepia(60%) saturate(1000%) hue-rotate(359deg) brightness(103%) contrast(101%);
   flex-shrink: 0;
+}
+
+/* Screen-share badge icon inside user-name pill */
+.screen-share-icon {
+  width: 14px;
+  height: 14px;
+  /* Teal tint to make it distinct from hand icon */
+  filter: invert(72%) sepia(80%) saturate(800%) hue-rotate(155deg) brightness(105%) contrast(100%);
+  flex-shrink: 0;
+}
+
+/* Subtle glow on user cards that are currently sharing their screen */
+.user-item.has-screenshare {
+  box-shadow: 0 0 0 1.5px rgba(56, 220, 190, 0.45);
 }
 
 /* Adjust users sidebar when chat is visible */
@@ -360,16 +379,6 @@ body.chat-visible .users-sidebar {
 }
 
 .user-camera-video {
-  max-height: 100%;
-  max-width: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  display: block;
-  margin: auto;
-}
-
-.user-video-preview {
   max-height: 100%;
   max-width: 100%;
   width: auto;

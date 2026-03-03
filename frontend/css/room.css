@@ -25,7 +25,8 @@ body.show-cursor {
   bottom: 0;
   width: 100%;
   height: 100vh;
-  height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  height: 100dvh;
+  /* Dynamic viewport height for mobile browsers */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -35,7 +36,8 @@ body.show-cursor {
 /* Ensure wrapper works on all screen sizes */
 @supports (height: 100svh) {
   .room-wrapper {
-    height: 100svh; /* Small viewport height fallback */
+    height: 100svh;
+    /* Small viewport height fallback */
   }
 }
 
@@ -94,7 +96,7 @@ body.show-cursor {
   margin-bottom: 16px;
 }
 
-.permission-modal-content > p {
+.permission-modal-content>p {
   color: rgba(255, 255, 255, 0.8);
   font-size: 16px;
   line-height: 1.6;
@@ -139,7 +141,8 @@ body.show-cursor {
   transform: translateY(0);
   flex-shrink: 0;
   pointer-events: auto;
-  max-height: 160px; /* allow wrap on small screens */
+  max-height: 160px;
+  /* allow wrap on small screens */
   padding: clamp(10px, 2vh, 20px) clamp(15px, 2.5vw, 30px);
 }
 
@@ -185,11 +188,13 @@ body.show-cursor {
   position: relative;
   flex: 1 1 0;
   width: 100%;
-  height: 0; /* Start at 0, flex-grow will expand it */
+  height: 0;
+  /* Start at 0, flex-grow will expand it */
   min-height: 0;
   overflow: hidden;
   z-index: 1;
 }
+
 
 .video-grid {
   width: 100%;
@@ -212,7 +217,8 @@ body.show-cursor {
 
 .video-grid.single-video .video-item {
   flex: 1 1 0;
-  height: 0; /* Start at 0, flex-grow expands to fill */
+  height: 0;
+  /* Start at 0, flex-grow expands to fill */
   min-height: 0;
   aspect-ratio: auto;
   border-radius: 0;
@@ -301,13 +307,11 @@ body.show-cursor {
   background: #000;
 }
 
-.video-item.local video {
-  transform: scaleX(-1); /* Mirror local video */
-}
-
 .video-item.screenshare video {
-  transform: none; /* Do not mirror screen share */
-  object-fit: contain; /* Fit the whole screen into the frame (no crop) */
+  transform: none;
+  /* Do not mirror screen share */
+  object-fit: contain;
+  /* Fit the whole screen into the frame (no crop) */
 }
 
 /* Remote video: same fit as screenshare (no crop, black letterbox/pillarbox), but behind */
@@ -328,7 +332,8 @@ body.show-cursor {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 1; /* Above remote-video */
+  z-index: 1;
+  /* Above remote-video */
 }
 
 /* Remote video sits behind main-video */
@@ -340,7 +345,8 @@ body.show-cursor {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 0; /* Behind the main-video (screen share) */
+  z-index: 0;
+  /* Behind the main-video (screen share) */
 }
 
 .video-label {
@@ -423,7 +429,8 @@ body.show-cursor {
   transform: translateY(0);
   flex-shrink: 0;
   pointer-events: auto;
-  max-height: 140px; /* allow wrap on small screens */
+  max-height: 140px;
+  /* allow wrap on small screens */
   padding: clamp(12px, 2.5vh, 25px) clamp(15px, 2.5vw, 30px);
 }
 
@@ -495,7 +502,7 @@ body.show-cursor {
   max-width: 420px;
   width: 90%;
   text-align: center;
-  box-shadow: 
+  box-shadow:
     0 25px 80px rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   transform: scale(0.9) translateY(20px);

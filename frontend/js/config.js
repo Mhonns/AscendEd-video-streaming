@@ -130,4 +130,3 @@ if (typeof module !== 'undefined' && module.exports) {
   window.getAPIURL = getAPIURL;
   window.resetServerURL = resetServerURL;
 }
-

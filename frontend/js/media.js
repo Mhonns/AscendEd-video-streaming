@@ -2,24 +2,50 @@ const serverUrl = `streaming.nathadon.com`;
 const serverPort = 5000;
 const serverProtocol = 'https';
 
+// const DEFAULT_ICE_SERVERS = [
+//   { urls: 'stun:stun.l.google.com:19302' },
+//   { urls: 'stun:stun1.l.google.com:19302' },
+//   { urls: 'stun:stun2.l.google.com:19302' },
+//   {
+//     urls: 'turn:openrelay.metered.ca:80',
+//     username: 'openrelayproject',
+//     credential: 'openrelayproject'
+//   },
+//   {
+//     urls: 'turn:openrelay.metered.ca:443',
+//     username: 'openrelayproject',
+//     credential: 'openrelayproject'
+//   },
+//   {
+//     urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+//     username: 'openrelayproject',
+//     credential: 'openrelayproject'
+//   }
+// ];
+
 const DEFAULT_ICE_SERVERS = [
+  // STUN - free Google servers are fine to keep
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
   {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
+    urls: 'turn:138.252.93.34:3478',
+    username: 'mhon-cloud',
+    credential: 'Ofax0oEz7it9BDX7'
   },
   {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
+    urls: 'turn:138.252.93.34:3478?transport=tcp',
+    username: 'mhon-cloud',
+    credential: 'Ofax0oEz7it9BDX7'
   },
   {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
+    urls: 'turns:streaming.nathadon.com:5349',
+    username: 'mhon-cloud',
+    credential: 'Ofax0oEz7it9BDX7'
+  },
+  {
+    urls: 'turns:streaming.nathadon.com:5349?transport=tcp',
+    username: 'mhon-cloud',
+    credential: 'Ofax0oEz7it9BDX7'
   }
 ];
 
@@ -43,10 +69,10 @@ let screenStream = null;
  */
 function getAudioStream() {
   if (!localStream) return null;
-  
+
   const audioTracks = localStream.getAudioTracks();
   if (audioTracks.length === 0) return null;
-  
+
   const audioStream = new MediaStream();
   audioTracks.forEach(t => audioStream.addTrack(t));
   return audioStream;
@@ -57,10 +83,10 @@ function getAudioStream() {
  */
 function getCameraStream() {
   if (!localStream) return null;
-  
+
   const videoTracks = localStream.getVideoTracks();
   if (videoTracks.length === 0) return null;
-  
+
   const cameraStream = new MediaStream();
   videoTracks.forEach(t => cameraStream.addTrack(t));
   return cameraStream;
@@ -71,14 +97,14 @@ function getCameraStream() {
  */
 function broadcastAudioToSFU() {
   if (!window.SFUBroadcastModule) return;
-  
+
   const roomId = window.SocketHandler?.getCurrentRoomId();
   const userId = window.SocketHandler?.getUserId();
   if (!roomId || !userId) return;
-  
+
   const audioStream = getAudioStream();
   if (!audioStream) return;
-  
+
   window.SFUBroadcastModule.broadcastAudio(audioStream, roomId, userId)
     .then(() => console.log('[Media] Audio broadcast started'))
     .catch(err => console.error('[Media] Audio broadcast failed:', err));
@@ -89,14 +115,14 @@ function broadcastAudioToSFU() {
  */
 function broadcastCameraToSFU() {
   if (!window.SFUBroadcastModule) return;
-  
+
   const roomId = window.SocketHandler?.getCurrentRoomId();
   const userId = window.SocketHandler?.getUserId();
   if (!roomId || !userId) return;
-  
+
   const cameraStream = getCameraStream();
   if (!cameraStream) return;
-  
+
   window.SFUBroadcastModule.broadcastCamera(cameraStream, roomId, userId)
     .then(() => console.log('[Media] Camera broadcast started'))
     .catch(err => console.error('[Media] Camera broadcast failed:', err));
@@ -108,11 +134,11 @@ function broadcastCameraToSFU() {
 function broadcastScreenToSFU() {
   if (!window.SFUBroadcastModule) return;
   if (!screenStream) return;
-  
+
   const roomId = window.SocketHandler?.getCurrentRoomId();
   const userId = window.SocketHandler?.getUserId();
   if (!roomId || !userId) return;
-  
+
   window.SFUBroadcastModule.broadcastScreen(screenStream, roomId, userId)
     .then(() => console.log('[Media] Screen broadcast started'))
     .catch(err => console.error('[Media] Screen broadcast failed:', err));
@@ -136,7 +162,7 @@ async function requestMicrophonePermission() {
 
     // Request new audio stream
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    
+
     if (localStream) {
       // Add audio track to existing stream
       stream.getAudioTracks().forEach(track => {
@@ -145,7 +171,7 @@ async function requestMicrophonePermission() {
     } else {
       localStream = stream;
     }
-    
+
     isMicEnabled = true;
     console.log('Microphone permission granted');
     return true;
@@ -175,14 +201,14 @@ async function requestCameraPermission() {
     }
 
     // Request new video stream
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { 
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
         width: { ideal: 1280 },
         height: { ideal: 720 },
         facingMode: 'user'
-      } 
+      }
     });
-    
+
     if (localStream) {
       // Add video track to existing stream
       stream.getVideoTracks().forEach(track => {
@@ -191,7 +217,7 @@ async function requestCameraPermission() {
     } else {
       localStream = stream;
     }
-    
+
     isCameraEnabled = true;
     console.log('Camera permission granted');
     // Update people frame preview
@@ -215,7 +241,7 @@ function toggleMicrophone(enabled) {
     });
     isMicEnabled = enabled;
     console.log(`[Media] Microphone ${enabled ? 'enabled' : 'disabled'}`);
-    
+
     if (enabled) {
       // Start audio broadcast if not already broadcasting
       if (!window.SFUBroadcastModule?.isAudioBroadcasting?.()) {
@@ -240,11 +266,11 @@ function toggleCamera(enabled) {
       track.enabled = enabled;
     });
     isCameraEnabled = enabled;
-    
+
     if (enabled) {
       // 1. Show camera preview in people frame (local)
       displayLocalVideo();
-      
+
       // 2. Broadcast camera to SFU for other users
       if (!window.SFUBroadcastModule?.isCameraBroadcasting?.()) {
         broadcastCameraToSFU();
@@ -254,11 +280,11 @@ function toggleCamera(enabled) {
     } else {
       // Hide camera preview
       hideLocalVideo();
-      
+
       // Notify mute (don't stop broadcast, just mute the track)
       window.SFUBroadcastModule?.notifyMuteStatus('video', true);
     }
-    
+
     console.log(`[Media] Camera ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
@@ -322,7 +348,7 @@ function stopScreenShare() {
 
   try {
     screenStream.getTracks().forEach(t => t.stop());
-  } catch (_) {}
+  } catch (_) { }
 
   screenStream = null;
 
@@ -356,12 +382,12 @@ function isScreenSharing() {
 async function requestStopScreenShare(targetUserId) {
   const roomId = window.SocketHandler?.getCurrentRoomId();
   const requesterId = window.SocketHandler?.getUserId();
-  
+
   if (!roomId || !requesterId || !targetUserId) {
     console.warn('[Media] Missing required IDs for stop screenshare request');
     return;
   }
-  
+
   try {
     await fetch(`${serverProtocol}://${serverUrl}:${serverPort}/request-stop-screenshare`, {
       method: 'POST',
@@ -409,7 +435,7 @@ function showScreenSharePreview(stream) {
   const videoEl = document.getElementById('main-video');
   if (videoEl) {
     videoEl.srcObject = stream;
-    videoEl.play?.().catch?.(() => {});
+    videoEl.play?.().catch?.(() => { });
   }
 
   updateVideoGridLayout();
@@ -428,7 +454,7 @@ function hideScreenSharePreview() {
       try {
         mainVideoEl.pause();
         mainVideoEl.srcObject = null;
-      } catch (_) {}
+      } catch (_) { }
       mainVideoEl.remove();
     }
     // Update label
@@ -468,10 +494,10 @@ function stopMicrophone() {
       localStream.removeTrack(track);
     });
     isMicEnabled = false;
-    
+
     // Stop audio broadcast
     window.SFUBroadcastModule?.stopAudio?.();
-    
+
     console.log('[Media] Microphone stopped and released');
   }
 }
@@ -487,13 +513,13 @@ function stopCamera() {
       localStream.removeTrack(track);
     });
     isCameraEnabled = false;
-    
+
     // Hide camera preview in people frame
     hideLocalVideo();
-    
+
     // Stop camera broadcast
     window.SFUBroadcastModule?.stopCamera?.();
-    
+
     console.log('[Media] Camera stopped and released');
   }
 }
@@ -543,7 +569,7 @@ function stopAllMedia() {
 
   // Also stop screen share if active
   stopScreenShare();
-  
+
   // Stop all SFU broadcasts
   window.SFUBroadcastModule?.stopAllBroadcasts?.();
 }
@@ -598,5 +624,7 @@ window.MediaModule = {
   // Expose broadcast functions for external use
   broadcastAudioToSFU,
   broadcastCameraToSFU,
-  broadcastScreenToSFU
+  broadcastScreenToSFU,
+  // Expose screen preview so sidebar can render it on demand
+  showScreenSharePreview
 };
