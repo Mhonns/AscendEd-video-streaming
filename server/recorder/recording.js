@@ -17,7 +17,7 @@ const express = require('express');
 const router = express.Router();
 
 const roomsModule = require('../rooms');
-const recorder = require('../recorder');
+const recorder = require('.');
 
 // io instance is injected by main.js after Socket.io is initialised
 let _io = null;

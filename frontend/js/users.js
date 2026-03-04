@@ -322,6 +322,9 @@ function displayUsers(users) {
       existing.name = user.name || existing.name;
       existing.profileImage = user.profileImage || existing.profileImage;
       if (!Number.isFinite(existing.priority)) existing.priority = 0;
+      // Apply server-provided media state if present
+      if (user.audioOn !== undefined) existing.audioOn = !!user.audioOn;
+      if (user.videoOn !== undefined) existing.videoOn = !!user.videoOn;
     } else {
       userStateById.set(user.userId, {
         userId: user.userId,
@@ -330,8 +333,8 @@ function displayUsers(users) {
         priority: 0,
         pinned: false,
         screenShareOn: false,
-        videoOn: false,
-        audioOn: false,
+        videoOn: user.videoOn !== undefined ? !!user.videoOn : false,
+        audioOn: user.audioOn !== undefined ? !!user.audioOn : false,
         handsUp: false
       });
     }

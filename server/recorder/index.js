@@ -2,11 +2,13 @@
  * Recorder Module
  * Server-side recording using wrtc + FFmpeg.
  *
- * Layout:
- *   - Screen share from priority user → fullscreen (fd:3)
- *   - Camera from priority user       → PiP overlay, bottom-right (fd:4)
+ * Layout (1920×1080 output):
+ *   - Screen share from priority user → left 75% of frame  (1440×1080, letterboxed)
+ *   - Camera from priority user       → right 25% of frame (480×1080,  letterboxed)
  *   - Audio from ALL users            → PCM-summed mono mix (fd:5)
  *
+ * Neither the screen nor the camera panel covers the other.
+ * When camera is off the right panel shows black; when screen share stops it shows black.
  * If the priority user has no screen share, only the camera is recorded fullscreen.
  * Recordings are saved to server/recorder/recordings/ and are NOT downloadable by clients.
  *
@@ -174,13 +176,27 @@ class RecordingSession {
         // Per-user latest audio chunk (for mixing)
         this._latestAudioChunks = new Map(); // userId -> Buffer
 
-        // Black frame filler for "camera off" (640x480)
+        // Black frame filler for "camera off" (640x480 YUV420p)
         this._lastCameraFrameTime = 0;
         this._blackFrame = Buffer.concat([
-            Buffer.alloc(640 * 480, 16),      // Y (Luma - black is ~16 in limited range)
-            Buffer.alloc(640 * 480 / 2, 128)  // U/V (Chroma - 128 is neutral)
+            Buffer.alloc(640 * 480, 16),      // Y plane (black ~16 in limited range)
+            Buffer.alloc(640 * 480 / 2, 128)  // U+V planes (128 = neutral chroma)
         ]);
         this._fillerInterval = null;
+
+        // Black frame filler for "screen off" — pre-built at default 1920×1080.
+        // Rebuilt at actual dimensions once the first screen frame arrives.
+        this._lastScreenFrameTime = 0;
+        this._blackScreenFrame = Buffer.concat([
+            Buffer.alloc(1920 * 1080, 16),
+            Buffer.alloc(1920 * 1080 / 2, 128)
+        ]);
+        this._screenFillerInterval = null;
+
+        // Silence filler for "mic off" — 10ms of PCM zeros at 48kHz mono s16le = 960 bytes
+        this._lastAudioChunkTime = 0;
+        this._silenceBuffer = Buffer.alloc(960); // 48000 Hz / 100 * 2 bytes
+        this._audioSilenceInterval = null;
     }
 
     // -------------------------------------------------------------------------
@@ -288,17 +304,36 @@ class RecordingSession {
         this.screenSink.addEventListener('frame', ({ frame }) => {
             const { width, height, data } = frame;
 
+            // Mark that a real frame arrived so the screen filler backs off
+            this._lastScreenFrameTime = Date.now();
+
             if (!this._ffmpegStarted) {
                 this._screenWidth = width;
                 this._screenHeight = height;
+                // Lock in the expected frame size (YUV420p = w * h * 1.5)
+                this._expectedScreenFrameSize = Math.round(width * height * 1.5);
+                // Rebuild the black screen frame to match the actual resolution
+                this._blackScreenFrame = Buffer.concat([
+                    Buffer.alloc(width * height, 16),
+                    Buffer.alloc(width * height / 2, 128)
+                ]);
                 this._screenReady = true;
                 this._screenQueue.push(Buffer.from(data));
                 this._trySpawnFFmpeg();
                 return;
             }
 
-            if (this.ffmpeg?.stdio[3]?.writable) {
-                try { this.ffmpeg.stdio[3].write(Buffer.from(data)); } catch (_) { }
+            // Guard: skip any frame whose byte length doesn't match what FFmpeg
+            // was told to expect. This prevents "Invalid buffer size" errors that
+            // occur when the sender briefly changes resolution or sends a partial frame.
+            const frameSize = data.byteLength;
+            if (this._expectedScreenFrameSize && frameSize !== this._expectedScreenFrameSize) {
+                return;
+            }
+
+            const pipeIdx = this._screenPipeIdx;
+            if (pipeIdx != null && this.ffmpeg?.stdio[pipeIdx]?.writable) {
+                try { this.ffmpeg.stdio[pipeIdx].write(Buffer.from(data)); } catch (_) { }
             }
         });
     }
@@ -317,12 +352,21 @@ class RecordingSession {
             if (!this._ffmpegStarted) {
                 this._cameraWidth = width;
                 this._cameraHeight = height;
+                // Store the locked-in expected frame size (YUV420p = w * h * 1.5)
+                this._expectedCameraFrameSize = Math.round(width * height * 1.5);
                 this._cameraQueue.push(Buffer.from(data));
                 return;
             }
 
-            if (this.ffmpeg?.stdio[this._cameraPipeIdx]?.writable) {
-                try { this.ffmpeg.stdio[this._cameraPipeIdx].write(Buffer.from(data)); } catch (_) { }
+            // Guard: skip frames that don't match the declared dimensions.
+            const frameSize = data.byteLength;
+            if (this._expectedCameraFrameSize && frameSize !== this._expectedCameraFrameSize) {
+                return;
+            }
+
+            const pipeIdx = this._cameraPipeIdx;
+            if (pipeIdx != null && this.ffmpeg?.stdio[pipeIdx]?.writable) {
+                try { this.ffmpeg.stdio[pipeIdx].write(Buffer.from(data)); } catch (_) { }
             }
         });
     }
@@ -337,9 +381,15 @@ class RecordingSession {
         this.audioSinks.set(userId, sink);
 
         sink.addEventListener('data', ({ samples, sampleRate, channelCount }) => {
+            // Mark that audio is arriving so the silence filler backs off
+            this._lastAudioChunkTime = Date.now();
+
             if (!this._ffmpegStarted) {
                 this._sampleRate = sampleRate || 48000;
                 this._channelCount = channelCount || 1;
+                // Rebuild silence buffer with the actual sample rate / channel count
+                const silenceBytes = Math.round((this._sampleRate / 100) * this._channelCount * 2);
+                this._silenceBuffer = Buffer.alloc(silenceBytes);
                 // Store latest chunk per user for mixing
                 this._latestAudioChunks.set(userId, Buffer.from(samples.buffer));
 
@@ -381,10 +431,15 @@ class RecordingSession {
         this._spawnTimer = null;
 
         const hasScreen = !!this.screenSink;
-        const hasCamera = !!this.cameraSink;
+        const hasCameraTrack = !!this.cameraSink;
         const hasAudio = this.audioSinks.size > 0;
 
-        if (!hasScreen && !hasCamera && !hasAudio) {
+        // When screen is present, ALWAYS include a camera PiP pipe — even if no
+        // real camera track has arrived yet. The black-frame filler will drive it
+        // until (and whenever) the host actually turns their camera on.
+        const includeCameraPip = hasScreen;
+
+        if (!hasScreen && !hasCameraTrack && !hasAudio) {
             console.log(`[Recorder] No tracks arrived in time. Aborting FFmpeg spawn.`);
             return;
         }
@@ -402,6 +457,8 @@ class RecordingSession {
         let audioMap = '';
 
         // Input 0: Screen (fd:3)
+        // Even if the host later stops screen sharing, the _screenFillerInterval
+        // will keep sending black frames so FFmpeg's video demuxer never blocks.
         if (hasScreen) {
             const pipeIdx = 3 + inputCount;
             args.push('-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-s', `${sw}x${sh}`, '-r', '30', '-i', `pipe:${pipeIdx}`);
@@ -410,8 +467,16 @@ class RecordingSession {
             inputCount++;
         }
 
-        // Input 1: Camera (fd:4 etc)
-        if (hasCamera) {
+        // Input 1: Camera PiP (fd:4 etc)
+        // Always added when screen is present. Real frames OR black filler drive it.
+        if (includeCameraPip) {
+            const pipeIdx = 3 + inputCount;
+            args.push('-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-s', `${cw}x${ch}`, '-r', '30', '-i', `pipe:${pipeIdx}`);
+            stdio.push('pipe');
+            this._cameraPipeIdx = pipeIdx;
+            inputCount++;
+        } else if (hasCameraTrack) {
+            // Camera only (no screen share) — fullscreen camera
             const pipeIdx = 3 + inputCount;
             args.push('-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-s', `${cw}x${ch}`, '-r', '30', '-i', `pipe:${pipeIdx}`);
             stdio.push('pipe');
@@ -420,33 +485,53 @@ class RecordingSession {
         }
 
         // Input 2: Audio (fd:5 etc)
+        // Even if everyone mutes, the _audioSilenceInterval sends PCM zeros so
+        // FFmpeg's audio demuxer never blocks and audio track stays in the file.
         if (hasAudio) {
             const pipeIdx = 3 + inputCount;
             args.push('-f', 's16le', '-ar', String(ar), '-ac', '1', '-i', `pipe:${pipeIdx}`);
             stdio.push('pipe');
             this._audioPipeIdx = pipeIdx;
-            audioMap = `${inputCount}:a`; // the 'n' in 'n:a' is the input index (0, 1, or 2)
             inputCount++;
         }
 
-        // Filter Logic: Overlay camera in top-right if both exist
-        if (hasScreen && hasCamera) {
-            const pipW = Math.round(sw * 0.22);
-            const pipH = Math.round(pipW * (ch / cw));
-            const margin = 16;
-            // Get ffmpeg input indices (0-indexed)
-            // If screen is first, it's 0. If camera is next, it's 1.
+        // ── Video Layout ─────────────────────────────────────────────────────────
+        // When both screen and camera exist the output is a side-by-side composition
+        // at 1920×1080 so neither panel covers the other:
+        //
+        //   ┌──────────────────────┬──────────┐
+        //   │                      │          │
+        //   │   Screen share       │  Camera  │
+        //   │   (1440 × 1080, 75%) │  (480 ×  │
+        //   │                      │  1080,   │
+        //   │                      │   25%)   │
+        //   └──────────────────────┴──────────┘
+        //
+        // Each panel uses force_original_aspect_ratio=decrease + pad so any source
+        // resolution is letter/pillar-boxed into its slot without cropping.
+        if (hasScreen && (includeCameraPip || hasCameraTrack) && this._cameraPipeIdx != null) {
+            const outW = 1920, outH = 1080;
+            const scrPanelW = Math.round(outW * 0.75); // 1440
+            const camPanelW = outW - scrPanelW;        // 480
             const screenIdx = this._screenPipeIdx - 3;
             const cameraIdx = this._cameraPipeIdx - 3;
-            args.push('-filter_complex', `[${cameraIdx}:v]scale=${pipW}:${pipH}[cam];[${screenIdx}:v][cam]overlay=W-w-${margin}:${margin}[out]`);
+
+            // Each scale filter shrinks to fit the panel while preserving aspect ratio,
+            // then pad fills any remaining space with black.
+            const scrFilter = `[${screenIdx}:v]scale=${scrPanelW}:${outH}:force_original_aspect_ratio=decrease,` +
+                `pad=${scrPanelW}:${outH}:(ow-iw)/2:(oh-ih)/2:black[scr]`;
+            const camFilter = `[${cameraIdx}:v]scale=${camPanelW}:${outH}:force_original_aspect_ratio=decrease,` +
+                `pad=${camPanelW}:${outH}:(ow-iw)/2:(oh-ih)/2:black[cam]`;
+            const stackFilter = `[scr][cam]hstack=inputs=2[out]`;
+
+            args.push('-filter_complex', `${scrFilter};${camFilter};${stackFilter}`);
             videoMap = '[out]';
         } else if (hasScreen) {
             videoMap = `${this._screenPipeIdx - 3}:v`;
-        } else if (hasCamera) {
+        } else if (this._cameraPipeIdx != null) {
             videoMap = `${this._cameraPipeIdx - 3}:v`;
         }
 
-        // Determine audio mapping
         if (hasAudio) {
             audioMap = `${this._audioPipeIdx - 3}:a`;
         }
@@ -461,18 +546,47 @@ class RecordingSession {
             '-movflags', '+faststart', '-y', this.filePath
         );
 
-        console.log(`[Recorder] Spawning FFmpeg with ${inputCount} inputs. Screen:${hasScreen}, Camera:${hasCamera}, Audio:${hasAudio}`);
+        console.log(`[Recorder] Spawning FFmpeg with ${inputCount} inputs. Screen:${hasScreen}, CameraPip:${includeCameraPip || hasCameraTrack}, Audio:${hasAudio}`);
         this.ffmpeg = spawn('ffmpeg', args, { stdio });
 
-        // Start filler interval: if no real camera frames arrive, send black frames to Pipe
-        if (hasCamera) {
+        // ── Camera filler ────────────────────────────────────────────────────
+        // Sends black frames at ~30 fps whenever the host's camera is off.
+        // Runs whenever we have a camera pipe (real track OR PiP slot).
+        if (this._cameraPipeIdx != null) {
             this._fillerInterval = setInterval(() => {
                 const now = Date.now();
-                // If no frame in last 100ms and pipe is writable, send black
                 if (now - this._lastCameraFrameTime > 100 && this.ffmpeg?.stdio[this._cameraPipeIdx]?.writable) {
                     try { this.ffmpeg.stdio[this._cameraPipeIdx].write(this._blackFrame); } catch (_) { }
                 }
             }, 33); // ~30 fps
+        }
+
+        // ── Screen filler ────────────────────────────────────────────────────
+        // Sends a black screen frame at ~30 fps whenever the screen share is
+        // paused or stopped mid-recording. This is what prevents the
+        // "audio-only file" bug: without this, FFmpeg's rawvideo demuxer
+        // blocks on pipe:3 when frames stop arriving, and the muxer then
+        // produces a file that only contains the audio that continued to flow.
+        if (hasScreen) {
+            this._screenFillerInterval = setInterval(() => {
+                const now = Date.now();
+                if (now - this._lastScreenFrameTime > 100 && this.ffmpeg?.stdio[this._screenPipeIdx]?.writable) {
+                    try { this.ffmpeg.stdio[this._screenPipeIdx].write(this._blackScreenFrame); } catch (_) { }
+                }
+            }, 33); // ~30 fps
+        }
+
+        // ── Audio silence filler ─────────────────────────────────────────────
+        // Writes PCM zeros (silence) every 10ms when the host mutes their mic.
+        // Without this, muting causes a gap on the audio pipe which can cause
+        // FFmpeg's audio demuxer to stall and the A/V to desync.
+        if (hasAudio) {
+            this._audioSilenceInterval = setInterval(() => {
+                const now = Date.now();
+                if (now - this._lastAudioChunkTime > 20 && this.ffmpeg?.stdio[this._audioPipeIdx]?.writable) {
+                    try { this.ffmpeg.stdio[this._audioPipeIdx].write(this._silenceBuffer); } catch (_) { }
+                }
+            }, 10); // 10 ms
         }
 
         this.ffmpeg.on('close', (code) => {
@@ -483,17 +597,19 @@ class RecordingSession {
             console.error('[Recorder] FFmpeg error:', err.message);
         });
 
-        // Drain queued screen frames
+        // Drain queued screen frames — skip any that don't match the locked-in size
         if (hasScreen) {
             for (const buf of this._screenQueue) {
+                if (this._expectedScreenFrameSize && buf.byteLength !== this._expectedScreenFrameSize) continue;
                 try { this.ffmpeg.stdio[this._screenPipeIdx].write(buf); } catch (_) { }
             }
             this._screenQueue = [];
         }
 
-        // Drain queued camera frames
-        if (hasCamera) {
+        // Drain queued camera frames — skip any that don't match the locked-in size
+        if (this._cameraPipeIdx != null) {
             for (const buf of this._cameraQueue) {
+                if (this._expectedCameraFrameSize && buf.byteLength !== this._expectedCameraFrameSize) continue;
                 try { this.ffmpeg.stdio[this._cameraPipeIdx].write(buf); } catch (_) { }
             }
             this._cameraQueue = [];
@@ -514,28 +630,50 @@ class RecordingSession {
     async stop() {
         console.log(`[Recorder] Stopping recording for room ${this.roomId}`);
 
-        // Stop video sinks
+        // Cancel the pending FFmpeg spawn timer if stop() is called before it fires.
+        // Without this, FFmpeg would spawn AFTER we've already torn everything down,
+        // leaving an empty/corrupt file and zombie processes.
+        if (this._spawnTimer) {
+            clearTimeout(this._spawnTimer);
+            this._spawnTimer = null;
+        }
+
+        // Stop all filler/silence intervals before stopping sinks
+        if (this._fillerInterval) { clearInterval(this._fillerInterval); this._fillerInterval = null; }
+        if (this._screenFillerInterval) { clearInterval(this._screenFillerInterval); this._screenFillerInterval = null; }
+        if (this._audioSilenceInterval) { clearInterval(this._audioSilenceInterval); this._audioSilenceInterval = null; }
+
+        // IMPORTANT: Stop all WebRTC sinks FIRST, BEFORE ending the FFmpeg pipes.
+        //
+        // Why? The sink's frame/data handler is asynchronous — even after you call
+        // pipe.end(), the sink can fire one final 'frame' event on the next event-loop
+        // tick and write a new (potentially partial) buffer into a pipe that has
+        // already signalled EOF. This is exactly what causes:
+        //   "Packet corrupt (stream = 0)" and
+        //   "Invalid buffer size, packet size N < expected frame_size M"
+        //
+        // By stopping the sinks first we guarantee that the data producers are
+        // silent before we tell FFmpeg the stream is over.
         try { this.screenSink?.stop(); } catch (_) { }
         try { this.cameraSink?.stop(); } catch (_) { }
-
-        // Stop all audio sinks
         this.audioSinks.forEach(sink => {
             try { sink.stop(); } catch (_) { }
         });
         this.audioSinks.clear();
 
-        if (this._fillerInterval) {
-            clearInterval(this._fillerInterval);
-            this._fillerInterval = null;
-        }
+        // Small yield so any in-flight frame callbacks that were already queued
+        // in the microtask/event queue finish before we end the pipes.
+        await new Promise(resolve => setImmediate(resolve));
 
         if (this.ffmpeg) {
-            // Close all input pipes so FFmpeg finalizes the file
-            if (this._screenPipeIdx) try { this.ffmpeg.stdio[this._screenPipeIdx]?.end(); } catch (_) { }
-            if (this._cameraPipeIdx) try { this.ffmpeg.stdio[this._cameraPipeIdx]?.end(); } catch (_) { }
-            if (this._audioPipeIdx) try { this.ffmpeg.stdio[this._audioPipeIdx]?.end(); } catch (_) { }
+            // Now it is safe to end the pipes — no more data can arrive from the
+            // sinks we just stopped. Ending the pipes signals clean EOF to FFmpeg
+            // so it can flush its internal buffers and finalize the container.
+            if (this._screenPipeIdx != null) try { this.ffmpeg.stdio[this._screenPipeIdx]?.end(); } catch (_) { }
+            if (this._cameraPipeIdx != null) try { this.ffmpeg.stdio[this._cameraPipeIdx]?.end(); } catch (_) { }
+            if (this._audioPipeIdx != null) try { this.ffmpeg.stdio[this._audioPipeIdx]?.end(); } catch (_) { }
 
-            // Wait for FFmpeg to finish writing (max 20s)
+            // Wait for FFmpeg to finish writing the file (max 20s)
             await new Promise((resolve) => {
                 const timeout = setTimeout(resolve, 20000);
                 this.ffmpeg.on('close', () => { clearTimeout(timeout); resolve(); });
@@ -550,6 +688,10 @@ class RecordingSession {
     }
 
     destroy() {
+        if (this._spawnTimer) { clearTimeout(this._spawnTimer); this._spawnTimer = null; }
+        if (this._fillerInterval) { clearInterval(this._fillerInterval); this._fillerInterval = null; }
+        if (this._screenFillerInterval) { clearInterval(this._screenFillerInterval); this._screenFillerInterval = null; }
+        if (this._audioSilenceInterval) { clearInterval(this._audioSilenceInterval); this._audioSilenceInterval = null; }
         try { this.screenSink?.stop(); } catch (_) { }
         try { this.cameraSink?.stop(); } catch (_) { }
         this.audioSinks.forEach(sink => { try { sink.stop(); } catch (_) { } });

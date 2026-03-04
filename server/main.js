@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 8443;
 
 // Import modules
 const apiRoutes = require('./api');
-const recordingRoutes = require('./routes/recording');
+const recordingRoutes = require('./recorder/recording');
 const { initSocketEvents } = require('./socket-events');
 const { setIo: setSfuIo } = require('./sfu');
 const { setIo: setRecordingIo } = recordingRoutes;

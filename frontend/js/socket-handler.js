@@ -205,6 +205,16 @@ async function initSocket(roomId, userData) {
     }
   });
 
+  // Sync media states for all existing users when joining a room
+  socket.on('sync-media-states', (data) => {
+    console.log('[SocketHandler] Syncing media states:', data);
+    if (!Array.isArray(data?.mediaStates)) return;
+    data.mediaStates.forEach(({ userId: uid, audioOn, videoOn }) => {
+      window.UsersModule?.setAudioOn?.(uid, !!audioOn);
+      window.UsersModule?.setVideoOn?.(uid, !!videoOn);
+    });
+  });
+
   // Handle hands-up status changed
   socket.on('user-handsup-status', (data) => {
     console.log('[SocketHandler] User hands-up status:', data);

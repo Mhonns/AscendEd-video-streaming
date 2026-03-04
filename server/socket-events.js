@@ -93,6 +93,13 @@ function initSocketEvents(io) {
           users: existingUsers,
           roomId: roomId
         });
+
+        // Send current media states so the new user can render correct mic/camera icons
+        const mediaStates = existingUsers.map(eu => ({
+          userId: eu.userId,
+          ...roomsModule.getUserMediaState(eu.userId)
+        }));
+        socket.emit('sync-media-states', { mediaStates });
       }
     });
 
@@ -149,6 +156,34 @@ function initSocketEvents(io) {
       });
     });
 
+    // Handle mic/camera toggle — persist on server and broadcast to all
+    socket.on('toggle-media-status', (data) => {
+      const { roomId, userId, kind, enabled } = data;
+
+      if (!roomId || !userId || !kind) {
+        console.warn('[SocketEvents] Invalid toggle-media-status data:', data);
+        return;
+      }
+
+      const room = roomsModule.getRoom(roomId);
+      if (!room || !room.isActive) return;
+
+      // Persist on server
+      const update = kind === 'audio'
+        ? { audioOn: !!enabled }
+        : { videoOn: !!enabled };
+      roomsModule.setUserMediaState(userId, update);
+
+      console.log(`[SocketEvents] User ${userId} ${kind} ${enabled ? 'ON' : 'OFF'} in room ${roomId}`);
+
+      // Broadcast to everyone in the room (sender included for confirmation)
+      io.to(roomId).emit('user-mute-status', {
+        userId,
+        kind,  // 'audio' | 'video'
+        muted: !enabled
+      });
+    });
+
     // Handle emoji reaction
     socket.on('emoji-reaction', (data) => {
       const { roomId, userId, emoji } = data;
@@ -185,6 +220,7 @@ function handleUserLeave(socket, roomId, userId) {
     const userName = userProfile.name || 'Anonymous';
 
     roomsModule.leaveRoom(roomId, userId);
+    roomsModule.clearUserMediaState(userId);
     socket.leave(roomId);
 
     // Clean up all SFU streams for this user

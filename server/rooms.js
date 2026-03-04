@@ -7,6 +7,7 @@ const chatModule = require('./chat');
 const sfuModule = require('./sfu');
 const rooms = new Map();
 const users = new Map(); // Store user profiles: userId -> { name, profileImage }
+const userMediaState = new Map(); // Store media state: userId -> { audioOn, videoOn }
 
 /**
  * Create a new room
@@ -87,10 +88,15 @@ function destroyRoom(roomId) {
 function getRoomUsers(roomId) {
   const room = rooms.get(roomId);
   if (!room) return [];
-  
+
   return Array.from(room.participants)
-    .map(userId => users.get(userId))
-    .filter(user => user && user.name && user.name !== 'Anonymous');
+    .map(userId => {
+      const profile = users.get(userId);
+      if (!profile || !profile.name || profile.name === 'Anonymous') return null;
+      const media = userMediaState.get(userId) || { audioOn: false, videoOn: false };
+      return { ...profile, audioOn: media.audioOn, videoOn: media.videoOn };
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -120,6 +126,32 @@ function isUserInRoom(roomId, userId) {
   return room && room.participants.has(userId);
 }
 
+/**
+ * Set a user's media state (audioOn / videoOn)
+ */
+function setUserMediaState(userId, { audioOn, videoOn }) {
+  const current = userMediaState.get(userId) || { audioOn: false, videoOn: false };
+  userMediaState.set(userId, {
+    audioOn: audioOn !== undefined ? !!audioOn : current.audioOn,
+    videoOn: videoOn !== undefined ? !!videoOn : current.videoOn
+  });
+  return userMediaState.get(userId);
+}
+
+/**
+ * Get a user's media state
+ */
+function getUserMediaState(userId) {
+  return userMediaState.get(userId) || { audioOn: false, videoOn: false };
+}
+
+/**
+ * Clear a user's media state on leave
+ */
+function clearUserMediaState(userId) {
+  userMediaState.delete(userId);
+}
+
 module.exports = {
   rooms,
   users,
@@ -132,6 +164,9 @@ module.exports = {
   getRoomUsers,
   saveUserProfile,
   getUserProfile,
-  isUserInRoom
+  isUserInRoom,
+  setUserMediaState,
+  getUserMediaState,
+  clearUserMediaState
 };
 
