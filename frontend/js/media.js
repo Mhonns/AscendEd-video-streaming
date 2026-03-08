@@ -334,6 +334,9 @@ async function startScreenShare() {
     // Broadcast screen share to SFU (separate from audio and camera)
     broadcastScreenToSFU();
 
+    // Notify server of the updated full media state (screenOn = true)
+    window.ButtonsModule?.emitMediaUpdate?.();
+
     console.log('[Media] Screen sharing started');
     return screenStream;
   } catch (error) {
@@ -367,6 +370,9 @@ function stopScreenShare() {
 
   // Stop screen broadcast (audio and camera continue separately)
   window.SFUBroadcastModule?.stopScreen?.();
+
+  // Notify server of the updated full media state (screenOn = false)
+  window.ButtonsModule?.emitMediaUpdate?.();
 
   console.log('[Media] Screen sharing stopped');
 }

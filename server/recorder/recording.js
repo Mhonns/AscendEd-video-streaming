@@ -67,6 +67,10 @@ router.post('/start', async (req, res) => {
 
 // POST /api/recording/stop
 // Body: { roomId, requesterId }
+//
+// Strategy: validate & dequeue the session immediately, broadcast 'recording-stopped'
+// to all clients RIGHT AWAY (so the UI updates instantly), then let FFmpeg finish
+// flushing the file in the background — the HTTP response is also sent immediately.
 router.post('/stop', async (req, res) => {
     const { roomId, requesterId } = req.body;
 
@@ -79,13 +83,16 @@ router.post('/stop', async (req, res) => {
         return res.status(404).json({ error: 'Room not found' });
     }
 
-    const result = await recorder.stopRecording(roomId);
-
-    if (!result.ok) {
-        return res.status(400).json({ error: result.error });
+    // Dequeue the session immediately so getStatus() returns inactive right away
+    // and no new stop request can race with us. recorder.beginStop() removes the
+    // session from activeSessions and returns it (or null if none).
+    const session = recorder.dequeueSession(roomId);
+    if (!session) {
+        return res.status(400).json({ error: 'No active recording for this room' });
     }
 
-    // Broadcast to all room participants
+    // ── Instant UI update ────────────────────────────────────────────────────
+    // Broadcast BEFORE waiting for FFmpeg so every client un-freezes immediately.
     if (_io) {
         _io.to(roomId).emit('recording-stopped', {
             roomId,
@@ -93,9 +100,20 @@ router.post('/stop', async (req, res) => {
         });
     }
 
-    const fileName = require('path').basename(result.filePath);
-    console.log(`[RecordingRoute] Recording stopped for room ${roomId}: ${fileName}`);
+    // Respond to the HTTP caller right away — the file is not ready yet but
+    // the client only needs the filename for informational display (not download).
+    const fileName = require('path').basename(session.filePath);
+    console.log(`[RecordingRoute] Recording stop initiated for room ${roomId}: ${fileName}`);
     res.json({ success: true, fileName });
+
+    // ── Background save ──────────────────────────────────────────────────────
+    // Actually stop the sinks, end the FFmpeg pipes, and wait for the process
+    // to finish — all without blocking the request/response cycle above.
+    session.stop().then(() => {
+        console.log(`[RecordingRoute] Recording saved (background): ${fileName}`);
+    }).catch((err) => {
+        console.error(`[RecordingRoute] Error saving recording (background):`, err.message);
+    });
 });
 
 // GET /api/recording/status/:roomId

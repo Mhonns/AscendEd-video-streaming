@@ -11,15 +11,23 @@ let isHandRaised = false;
 const usersSidebar = document.getElementById('users-sidebar');
 
 /**
- * Emit mic/camera status change to server so it persists and broadcasts to all.
+ * Emit the complete current media state to server so it can persist and
+ * broadcast to all users in the room.  Call this whenever mic, camera, or
+ * screen-share status changes locally.
  */
-function emitMediaStatus(kind, enabled) {
+function emitMediaUpdate() {
   const socket = window.SocketHandler?.getSocket();
   const roomId = window.SocketHandler?.getCurrentRoomId();
   const userId = localStorage.getItem('userId');
-  if (socket && roomId && userId) {
-    socket.emit('toggle-media-status', { roomId, userId, kind, enabled });
-  }
+  if (!socket || !roomId || !userId) return;
+
+  socket.emit('request-media-update', {
+    roomId,
+    userId,
+    audioOn: isMicOn,
+    videoOn: isCameraOn,
+    screenOn: !!(window.MediaModule?.isScreenSharing?.())
+  });
 }
 
 // Initialize all button handlers
@@ -52,7 +60,7 @@ function initMicrophoneButton() {
           window.MediaModule?.toggleMicrophone(isMicOn);
           this.classList.remove('off');
           micIcon.src = '../assets/icons/mic.svg';
-          emitMediaStatus('audio', true);
+          emitMediaUpdate();
           console.log('Microphone turned ON');
         }
       } else {
@@ -61,7 +69,7 @@ function initMicrophoneButton() {
         window.MediaModule?.toggleMicrophone(isMicOn);
         this.classList.add('off');
         micIcon.src = '../assets/icons/mic-off.svg';
-        emitMediaStatus('audio', false);
+        emitMediaUpdate();
         console.log('Microphone turned OFF');
       }
     });
@@ -84,7 +92,7 @@ function initCameraButton() {
           window.MediaModule?.toggleCamera(isCameraOn);
           this.classList.remove('off');
           cameraIcon.src = '../assets/icons/camera.svg';
-          emitMediaStatus('video', true);
+          emitMediaUpdate();
           console.log('Camera turned ON');
         }
       } else {
@@ -93,7 +101,7 @@ function initCameraButton() {
         isCameraOn = false;
         this.classList.add('off');
         cameraIcon.src = '../assets/icons/camera-off.svg';
-        emitMediaStatus('video', false);
+        emitMediaUpdate();
         console.log('Camera turned OFF');
       }
     });
@@ -422,5 +430,6 @@ window.ButtonsModule = {
   getRecordingState: () => window.RecordingModule?.isActive?.() ?? false,
   setMicState: (state) => { isMicOn = state; },
   setCameraState: (state) => { isCameraOn = state; },
-  showFloatingEmoji
+  showFloatingEmoji,
+  emitMediaUpdate
 };

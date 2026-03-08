@@ -74,7 +74,12 @@ const RecordingModule = (() => {
         }
     }
 
-    // stopRecording — called by the host's button click
+    // stopRecording — called by the host's button click.
+    //
+    // The server responds immediately after dequeuing the session and broadcasting
+    // 'recording-stopped' to all clients. FFmpeg finalization happens in the background
+    // on the server. The UI is already updated via the socket event before this
+    // promise even resolves, so this function just handles error cases.
     async function stopRecording() {
         if (!_roomId || !_userId) return false;
 
@@ -93,7 +98,10 @@ const RecordingModule = (() => {
                 return false;
             }
 
-            console.log('[Recording] Recording stopped. File saved on server:', data.fileName);
+            // UI is already updated by the 'recording-stopped' socket event which
+            // the server emits before responding here. The file is still being
+            // written by FFmpeg in the background on the server.
+            console.log('[Recording] Stop acknowledged by server. File saving in background:', data.fileName);
             return true;
         } catch (err) {
             console.error('[Recording] Network error on stop:', err);

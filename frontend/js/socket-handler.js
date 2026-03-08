@@ -19,13 +19,6 @@ function getCurrentRoomId() {
   return currentRoomId;
 }
 
-function setUserId(id) {
-  userId = id;
-}
-
-function setCurrentRoomId(roomId) {
-  currentRoomId = roomId;
-}
 
 // Initialize socket connection
 async function initSocket(roomId, userData) {
@@ -164,44 +157,23 @@ async function initSocket(roomId, userData) {
     window.SFUConsumeModule?.handleStreamStopped?.(streamUserId, streamType);
   });
 
-  /**
-   * LEGACY: Handle new-broadcaster event (backward compatibility)
-   * This event doesn't include streamType, so we treat it as a generic stream
-   */
-  socket.on('new-broadcaster', async (data) => {
-    console.log(`[SocketHandler] New broadcaster event received: ${data.userId} (my userId: ${userId})`);
+  // Full media state update from server (audio, video, screen)
+  socket.on('user-media-update', (data) => {
+    console.log('[SocketHandler] User media update:', data);
 
-    // Don't consume if it's our own broadcast
+    // Update the sidebar user-list icons for everyone
+    window.UsersModule?.setAudioOn?.(data.userId, !!data.audioOn);
+    window.UsersModule?.setVideoOn?.(data.userId, !!data.videoOn);
+    window.UsersModule?.setScreenShareOn?.(data.userId, !!data.screenOn);
+
+    // If this update is for the local user, keep ButtonsModule's internal
+    // state flags in sync so the toolbar buttons always reflect truth.
     if (data.userId === userId) {
-      console.log('[SocketHandler] Skipping - this is my own broadcast');
-      return;
-    }
+      const prevMic = window.ButtonsModule?.getMicState?.();
+      const prevCamera = window.ButtonsModule?.getCameraState?.();
 
-    // Store the broadcaster's userId for label display (legacy)
-    window.SFUConsumeModule?.setBroadcasterUserId?.(data.userId);
-
-    console.log('[SocketHandler] Will re-consume to get new broadcaster stream...');
-    if (window.SFUConsumeModule && typeof window.SFUConsumeModule.requestConsumeCurrentStreams === 'function') {
-      try {
-        await window.SFUConsumeModule.requestConsumeCurrentStreams(currentRoomId, userId);
-        console.log('[SocketHandler] Successfully consumed streams from new broadcaster');
-      } catch (error) {
-        console.error('[SocketHandler] Failed to consume from new broadcaster:', error);
-      }
-    } else {
-      console.error('[SocketHandler] SFUConsumeModule not available!');
-    }
-  });
-
-  // SFU: user mute status changed (for UI updates, audio continues via WebRTC)
-  socket.on('user-mute-status', (data) => {
-    console.log('[SocketHandler] User mute status:', data);
-
-    // Update user list UI to show mute status
-    if (data.kind === 'audio') {
-      window.UsersModule?.setAudioOn?.(data.userId, !data.muted);
-    } else if (data.kind === 'video') {
-      window.UsersModule?.setVideoOn?.(data.userId, !data.muted);
+      if (prevMic !== !!data.audioOn) window.ButtonsModule?.setMicState?.(!!data.audioOn);
+      if (prevCamera !== !!data.videoOn) window.ButtonsModule?.setCameraState?.(!!data.videoOn);
     }
   });
 
@@ -209,9 +181,17 @@ async function initSocket(roomId, userData) {
   socket.on('sync-media-states', (data) => {
     console.log('[SocketHandler] Syncing media states:', data);
     if (!Array.isArray(data?.mediaStates)) return;
-    data.mediaStates.forEach(({ userId: uid, audioOn, videoOn }) => {
+    data.mediaStates.forEach(({ userId: uid, audioOn, videoOn, screenOn, handsUp }) => {
       window.UsersModule?.setAudioOn?.(uid, !!audioOn);
       window.UsersModule?.setVideoOn?.(uid, !!videoOn);
+      window.UsersModule?.setScreenShareOn?.(uid, !!screenOn);
+      window.UsersModule?.setHandsUp?.(uid, !!handsUp);
+
+      // Sync ButtonsModule for the local user as well
+      if (uid === userId) {
+        window.ButtonsModule?.setMicState?.(!!audioOn);
+        window.ButtonsModule?.setCameraState?.(!!videoOn);
+      }
     });
   });
 
@@ -258,22 +238,8 @@ async function initSocket(roomId, userData) {
   });
 
   /**
-   * LEGACY: Handle broadcaster-left event (backward compatibility)
-   * This removes all streams for a user
+   * Initialize chat module
    */
-  socket.on('broadcaster-left', (data) => {
-    console.log('[SocketHandler] Broadcaster left:', data);
-
-    // Don't process if it's our own broadcast
-    if (data.userId === userId) {
-      return;
-    }
-
-    // Remove all streams from this user (legacy behavior)
-    window.SFUConsumeModule?.removeAllUserStreams?.(data.userId);
-  });
-
-  // Initialize chat module
   if (window.ChatModule) {
     window.ChatModule.init(socket, userId, roomId);
   }

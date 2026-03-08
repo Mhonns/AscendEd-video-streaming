@@ -147,6 +147,21 @@ function createUserItemElement(user) {
     name.appendChild(videoIcon);
   }
 
+  if (user.screenShareOn) {
+    const screenIcon = document.createElement('img');
+    screenIcon.className = 'screen-share-icon';
+    screenIcon.src = '../assets/icons/screen.svg';
+    screenIcon.alt = 'Screen sharing';
+    screenIcon.title = 'Screen sharing';
+    const firstChild = name.firstChild;
+    if (firstChild) {
+      name.insertBefore(screenIcon, firstChild);
+    } else {
+      name.appendChild(screenIcon);
+    }
+    userItem.classList.add('has-screenshare');
+  }
+
   // Create action buttons container
   const actions = document.createElement('div');
   actions.className = 'user-actions';
@@ -181,6 +196,24 @@ function createUserItemElement(user) {
     e.stopPropagation();
     handleKickUser(user.userId);
   };
+
+  if (user.screenShareOn) {
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'user-action-btn view-screen-btn';
+    viewBtn.title = 'View Screen';
+    viewBtn.innerHTML = `<img src="../assets/icons/screen.svg" alt="View Screen">`;
+    viewBtn.onclick = (e) => {
+      e.stopPropagation();
+      const localUserId = localStorage.getItem('userId');
+      if (user.userId === localUserId) {
+        const stream = window.MediaModule?.getScreenStream?.();
+        if (stream) window.MediaModule?.showScreenSharePreview?.(stream);
+      } else {
+        window.SFUConsumeModule?.jumpToScreenShare?.(user.userId);
+      }
+    };
+    actions.appendChild(viewBtn);
+  }
 
   actions.appendChild(muteBtn);
   actions.appendChild(pinBtn);
@@ -322,9 +355,18 @@ function displayUsers(users) {
       existing.name = user.name || existing.name;
       existing.profileImage = user.profileImage || existing.profileImage;
       if (!Number.isFinite(existing.priority)) existing.priority = 0;
+
       // Apply server-provided media state if present
       if (user.audioOn !== undefined) existing.audioOn = !!user.audioOn;
       if (user.videoOn !== undefined) existing.videoOn = !!user.videoOn;
+      if (user.screenOn !== undefined) existing.screenShareOn = !!user.screenOn;
+      if (user.handsUp !== undefined) existing.handsUp = !!user.handsUp;
+
+      // Update icons if they exist in DOM
+      updateAudioIcon(user.userId, existing.audioOn);
+      updateVideoIcon(user.userId, existing.videoOn);
+      updateScreenShareIcon(user.userId, existing.screenShareOn);
+      updateHandIcon(user.userId, existing.handsUp);
     } else {
       userStateById.set(user.userId, {
         userId: user.userId,
@@ -332,10 +374,10 @@ function displayUsers(users) {
         profileImage: user.profileImage || '../assets/icons/people.svg',
         priority: 0,
         pinned: false,
-        screenShareOn: false,
+        screenShareOn: user.screenOn !== undefined ? !!user.screenOn : false,
         videoOn: user.videoOn !== undefined ? !!user.videoOn : false,
         audioOn: user.audioOn !== undefined ? !!user.audioOn : false,
-        handsUp: false
+        handsUp: user.handsUp !== undefined ? !!user.handsUp : false
       });
     }
   });

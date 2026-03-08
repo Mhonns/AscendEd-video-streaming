@@ -5,6 +5,9 @@ const webrtc = require("wrtc");
 const fs = require('fs');
 const https = require('https');
 const cors = require('cors');
+const EventEmitter = require('events');
+
+const sfuEvents = new EventEmitter();
 
 // Enable CORS for all origins
 app.use(cors());
@@ -629,6 +632,9 @@ function handleTrackEvent(e, roomId, userId, streamType) {
             streamId: stream.id
         });
     }
+
+    // Emit internal event for server-side recording
+    sfuEvents.emit('new-stream', { roomId, userId, streamType, streamKey, stream });
 }
 
 function destroyRoomStreams(roomId) {
@@ -694,6 +700,9 @@ function removeStream(roomId, userId, streamType) {
             streamKey
         });
     }
+
+    // Emit internal event for server-side recording
+    sfuEvents.emit('stream-stopped', { roomId, userId, streamType, streamKey });
 
     console.log(`[REMOVE-STREAM] Removed ${streamKey} from room ${roomId}`);
 }
@@ -790,7 +799,8 @@ module.exports = {
     iceServers,
     setIo,
     makeStreamKey,
-    parseStreamKey
+    parseStreamKey,
+    sfuEvents
 };
 
 // Read SSL certificates

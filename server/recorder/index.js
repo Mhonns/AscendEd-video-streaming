@@ -10,7 +10,6 @@
  * Neither the screen nor the camera panel covers the other.
  * When camera is off the right panel shows black; when screen share stops it shows black.
  * If the priority user has no screen share, only the camera is recorded fullscreen.
- * Recordings are saved to server/recorder/recordings/ and are NOT downloadable by clients.
  *
  * Only one active recording per room is allowed.
  */
@@ -66,16 +65,29 @@ async function startRecording(roomId, priorityUserId, iceServers, meetingName) {
 }
 
 /**
- * Stop the active recording for a room.
+ * Atomically remove and return the active session without stopping it.
+ * The caller is responsible for invoking session.stop() (typically in the background).
+ * Returns null when there is no active session for the room.
+ */
+function dequeueSession(roomId) {
+    const session = activeSessions.get(roomId);
+    if (!session) return null;
+    activeSessions.delete(roomId);
+    return session;
+}
+
+/**
+ * Stop the active recording for a room (awaits full FFmpeg finalization).
+ * Prefer dequeueSession() + session.stop() when you want to decouple UI
+ * notification from the file-save wait.
  * @returns {{ ok: boolean, filePath?: string, error?: string }}
  */
 async function stopRecording(roomId) {
-    const session = activeSessions.get(roomId);
+    const session = dequeueSession(roomId);
     if (!session) {
         return { ok: false, error: 'No active recording for this room' };
     }
 
-    activeSessions.delete(roomId);
     const filePath = await session.stop();
     return { ok: true, filePath };
 }
@@ -147,7 +159,6 @@ class RecordingSession {
         }
         this.filePath = filePath;
 
-        this.peer = null;
         this.ffmpeg = null;
 
         // Sinks for priority user
@@ -156,11 +167,14 @@ class RecordingSession {
         // Audio sinks for ALL users: userId -> RTCAudioSink
         this.audioSinks = new Map();
 
-        // Recorded frame dimensions
+        // Removed dynamic dimension logic; we strictly fix internal FFmpeg tracks.
         this._screenWidth = 1920;
         this._screenHeight = 1080;
-        this._cameraWidth = 640;
-        this._cameraHeight = 480;
+        this._cameraWidth = 1280;
+        this._cameraHeight = 720;
+        this._expectedScreenFrameSize = this._screenWidth * this._screenHeight * 1.5;
+        this._expectedCameraFrameSize = this._cameraWidth * this._cameraHeight * 1.5;
+
         this._sampleRate = 48000;
         this._channelCount = 1;
 
@@ -168,7 +182,7 @@ class RecordingSession {
         this._screenReady = false;
         this._ffmpegStarted = false;
 
-        // Queues before ffmpeg is ready
+        // Queues before ffmpeg is ready (stores width, height, data)
         this._screenQueue = [];
         this._cameraQueue = [];
         this._audioQueue = [];
@@ -176,20 +190,18 @@ class RecordingSession {
         // Per-user latest audio chunk (for mixing)
         this._latestAudioChunks = new Map(); // userId -> Buffer
 
-        // Black frame filler for "camera off" (640x480 YUV420p)
+        // Black frame fillers based on strictly fixed dimensions
         this._lastCameraFrameTime = 0;
         this._blackFrame = Buffer.concat([
-            Buffer.alloc(640 * 480, 16),      // Y plane (black ~16 in limited range)
-            Buffer.alloc(640 * 480 / 2, 128)  // U+V planes (128 = neutral chroma)
+            Buffer.alloc(this._cameraWidth * this._cameraHeight, 16),
+            Buffer.alloc(this._cameraWidth * this._cameraHeight / 2, 128)
         ]);
         this._fillerInterval = null;
 
-        // Black frame filler for "screen off" — pre-built at default 1920×1080.
-        // Rebuilt at actual dimensions once the first screen frame arrives.
         this._lastScreenFrameTime = 0;
         this._blackScreenFrame = Buffer.concat([
-            Buffer.alloc(1920 * 1080, 16),
-            Buffer.alloc(1920 * 1080 / 2, 128)
+            Buffer.alloc(this._screenWidth * this._screenHeight, 16),
+            Buffer.alloc(this._screenWidth * this._screenHeight / 2, 128)
         ]);
         this._screenFillerInterval = null;
 
@@ -197,101 +209,186 @@ class RecordingSession {
         this._lastAudioChunkTime = 0;
         this._silenceBuffer = Buffer.alloc(960); // 48000 Hz / 100 * 2 bytes
         this._audioSilenceInterval = null;
+
+        // Scaler processes for dynamic resolution handling
+        this._screenScaler = null;
+        this._screenScalerWidth = 0;
+        this._screenScalerHeight = 0;
+        this._screenScalerBytesWritten = 0;
+
+        this._cameraScaler = null;
+        this._cameraScalerWidth = 0;
+        this._cameraScalerHeight = 0;
+        this._cameraScalerBytesWritten = 0;
+
+        this._lastScreenWidth = 0;
+        this._lastScreenHeight = 0;
+        this._lastScreenFrameData = null;
+
+        this._lastCameraWidth = 0;
+        this._lastCameraHeight = 0;
+        this._lastCameraFrameData = null;
+    }
+
+    _writeVideoFrame(pipeType, pipeIdx, width, height, data, expectedWidth, expectedHeight) {
+        if (!this.ffmpeg?.stdio[pipeIdx]?.writable) return;
+
+        // If resolution matches perfectly, write directly to main FFmpeg
+        if (width === expectedWidth && height === expectedHeight) {
+            if (this[`_${pipeType}Scaler`]) {
+                this[`_${pipeType}Scaler`].kill('SIGKILL');
+
+                // Align main pipe to a full frame boundary
+                const frameSize = Math.round(expectedWidth * expectedHeight * 1.5);
+                const remainder = this[`_${pipeType}ScalerBytesWritten`] % frameSize;
+                if (remainder !== 0) {
+                    try { this.ffmpeg.stdio[pipeIdx].write(Buffer.alloc(frameSize - remainder, 0)); } catch (_) { }
+                }
+
+                this[`_${pipeType}Scaler`] = null;
+                this[`_${pipeType}ScalerWidth`] = 0;
+                this[`_${pipeType}ScalerHeight`] = 0;
+            }
+            try { this.ffmpeg.stdio[pipeIdx].write(Buffer.from(data)); } catch (_) { }
+            return;
+        }
+
+        // Mismatch! Use a dedicated scaler process
+        const scalerKey = `_${pipeType}Scaler`;
+        const scalerWKey = `_${pipeType}ScalerWidth`;
+        const scalerHKey = `_${pipeType}ScalerHeight`;
+
+        if (this[scalerKey]) {
+            if (this[scalerWKey] === width && this[scalerHKey] === height) {
+                if (this[scalerKey].stdin.writable) {
+                    try { this[scalerKey].stdin.write(Buffer.from(data)); } catch (_) { }
+                }
+                return;
+            }
+            // Resolution changed! Kill old scaler securely.
+            this[scalerKey].kill('SIGKILL');
+
+            // Align main pipe to a full frame boundary
+            const frameSize = Math.round(expectedWidth * expectedHeight * 1.5);
+            const remainder = this[`${scalerKey}BytesWritten`] % frameSize;
+            if (remainder !== 0) {
+                try { this.ffmpeg.stdio[pipeIdx].write(Buffer.alloc(frameSize - remainder, 0)); } catch (_) { }
+            }
+            this[scalerKey] = null;
+        }
+
+        this[scalerWKey] = width;
+        this[scalerHKey] = height;
+
+        console.log(`[Recorder] Spawning scaler for ${pipeType}: ${width}x${height} -> ${expectedWidth}x${expectedHeight}`);
+
+        this[scalerKey] = spawn('ffmpeg', [
+            '-loglevel', 'error',
+            '-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-s', `${width}x${height}`, '-r', '30', '-i', 'pipe:0',
+            '-vf', `scale=${expectedWidth}:${expectedHeight}:force_original_aspect_ratio=decrease,pad=${expectedWidth}:${expectedHeight}:(ow-iw)/2:(oh-ih)/2:black`,
+            '-f', 'rawvideo', '-pix_fmt', 'yuv420p', 'pipe:1'
+        ]);
+
+        this[`${scalerKey}BytesWritten`] = 0;
+        this[scalerKey].stdout.on('data', chunk => {
+            this[`${scalerKey}BytesWritten`] += chunk.length;
+            if (this.ffmpeg?.stdio[pipeIdx]?.writable) {
+                try { this.ffmpeg.stdio[pipeIdx].write(chunk); } catch (_) { }
+            }
+        });
+
+        this[scalerKey].on('error', () => { });
+
+        if (this[scalerKey] && this[scalerKey].stdin && this[scalerKey].stdin.writable) {
+            try { this[scalerKey].stdin.write(Buffer.from(data)); } catch (_) { }
+        }
     }
 
     // -------------------------------------------------------------------------
     // start() — open wrtc consumer and wait for tracks
     // -------------------------------------------------------------------------
     async start() {
-        const { roomId, priorityUserId, iceServers } = this;
-
+        const { roomId, priorityUserId } = this;
         console.log(`[Recorder] Starting recording for room ${roomId}, priority user ${priorityUserId}`);
 
-        // Build SDP offer (many transceivers to capture all streams in room)
-        const peer = new webrtc.RTCPeerConnection({ iceServers });
-        this.peer = peer;
-
-        // Add generous number of transceivers: audio for every participant + 2 videos per user
-        // Using 8 audio + 8 video as generous headroom
-        for (let i = 0; i < 8; i++) {
-            peer.addTransceiver('audio', { direction: 'recvonly' });
-        }
-        for (let i = 0; i < 8; i++) {
-            peer.addTransceiver('video', { direction: 'recvonly' });
-        }
-
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-
-        // POST to the SFU /consumer endpoint running on localhost:5000
-        const fetch = require('node-fetch');
-        const https = require('https');
-        const agent = new https.Agent({ rejectUnauthorized: false });
-
-        const botUserId = `recorder_${roomId}`;
-        const sfuBaseUrl = 'https://localhost:5000';
-
-        const res = await fetch(`${sfuBaseUrl}/consumer`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sdp: peer.localDescription, roomId, userId: botUserId }),
-            agent
-        });
-
-        if (!res.ok) {
-            throw new Error(`[Recorder] /consumer returned ${res.status}`);
-        }
-
-        const data = await res.json();
-
-        // Build metadata maps
-        // streamId -> { oderId, streamType }
-        const streamMeta = new Map();
-        if (data.streamMetadata) {
-            for (const m of data.streamMetadata) {
-                streamMeta.set(m.streamId, { oderId: m.oderId, streamType: m.streamType });
-            }
-        }
-
-        // Attach track handler before setRemoteDescription
-        peer.ontrack = (event) => {
-            const track = event.track;
-            const stream = event.streams[0];
-            if (!stream) return;
-
-            const meta = streamMeta.get(stream.id);
-            if (!meta) {
-                console.log(`[Recorder] No metadata for stream ${stream.id}, skipping`);
-                return;
-            }
-
-            const { oderId, streamType } = meta;
-
-            // VIDEO: only from priority user
-            if (track.kind === 'video') {
-                if (oderId !== priorityUserId) {
-                    console.log(`[Recorder] Ignoring video from non-priority user ${oderId}`);
-                    return;
-                }
-
-                if (streamType === 'screen') {
-                    console.log(`[Recorder] Attaching SCREEN sink for priority user ${oderId}`);
-                    this._attachScreenSink(track);
-                } else if (streamType === 'camera' || streamType === 'media') {
-                    console.log(`[Recorder] Attaching CAMERA sink for priority user ${oderId}`);
-                    this._attachCameraSink(track);
-                }
-            }
-
-            // AUDIO: from ALL users
-            if (track.kind === 'audio') {
-                console.log(`[Recorder] Attaching AUDIO sink for user ${oderId}`);
-                this._attachAudioSink(track, oderId);
+        // Listen for internal SFU events unconditionally
+        this._newStreamListener = (data) => {
+            if (data.roomId === this.roomId) {
+                this._handleStream(data.userId, data.streamType, data.stream);
             }
         };
 
-        await peer.setRemoteDescription(new webrtc.RTCSessionDescription(data.sdp));
-        console.log(`[Recorder] Consumer SDP set. Waiting for tracks…`);
+        this._streamStoppedListener = (data) => {
+            if (data.roomId === this.roomId) {
+                this._handleStreamStopped(data.userId, data.streamType);
+            }
+        };
+
+        sfuModule.sfuEvents.on('new-stream', this._newStreamListener);
+        sfuModule.sfuEvents.on('stream-stopped', this._streamStoppedListener);
+
+        // Capture already existing streams
+        const activeStreams = sfuModule.roomUserStreams.get(this.roomId);
+        if (activeStreams) {
+            activeStreams.forEach((stream, streamKey) => {
+                const { userId: streamUserId, streamType } = sfuModule.parseStreamKey(streamKey);
+                this._handleStream(streamUserId, streamType, stream);
+            });
+        }
+
+        console.log(`[Recorder] Captured existing streams. Listening for new tracks.`);
+        this._trySpawnFFmpeg();
+    }
+
+    _handleStream(userId, streamType, stream) {
+        if (!stream) return;
+
+        if (userId === this.priorityUserId) {
+            if (streamType === 'screen') {
+                const track = stream.getVideoTracks()[0];
+                if (track) {
+                    console.log(`[Recorder] Attaching SCREEN sink for priority user ${userId}`);
+                    this._attachScreenSink(track);
+                }
+            } else if (streamType === 'camera' || streamType === 'media') {
+                const track = stream.getVideoTracks()[0];
+                if (track) {
+                    console.log(`[Recorder] Attaching CAMERA sink for priority user ${userId}`);
+                    this._attachCameraSink(track);
+                }
+            }
+        }
+
+        if (streamType === 'main' || streamType === 'media') {
+            const track = stream.getAudioTracks()[0];
+            if (track) {
+                console.log(`[Recorder] Attaching AUDIO sink for user ${userId}`);
+                this._attachAudioSink(track, userId);
+            }
+        }
+    }
+
+    _handleStreamStopped(userId, streamType) {
+        if (userId === this.priorityUserId) {
+            if (streamType === 'screen' && this.screenSink) {
+                try { this.screenSink.stop(); } catch (_) { }
+                this.screenSink = null;
+                console.log(`[Recorder] Detached SCREEN sink for priority user ${userId}`);
+            } else if ((streamType === 'camera' || streamType === 'media') && this.cameraSink) {
+                try { this.cameraSink.stop(); } catch (_) { }
+                this.cameraSink = null;
+                console.log(`[Recorder] Detached CAMERA sink for priority user ${userId}`);
+            }
+        }
+
+        if (streamType === 'main' || streamType === 'media') {
+            const sink = this.audioSinks.get(userId);
+            if (sink) {
+                try { sink.stop(); } catch (_) { }
+                this.audioSinks.delete(userId);
+                console.log(`[Recorder] Detached AUDIO sink for user ${userId}`);
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -307,34 +404,26 @@ class RecordingSession {
             // Mark that a real frame arrived so the screen filler backs off
             this._lastScreenFrameTime = Date.now();
 
-            if (!this._ffmpegStarted) {
-                this._screenWidth = width;
-                this._screenHeight = height;
-                // Lock in the expected frame size (YUV420p = w * h * 1.5)
-                this._expectedScreenFrameSize = Math.round(width * height * 1.5);
-                // Rebuild the black screen frame to match the actual resolution
+            // Clone the data explicitly because WebRTC buffers are volatile
+            this._lastScreenFrameData = Buffer.from(data);
+
+            if (this._lastScreenWidth !== width || this._lastScreenHeight !== height) {
+                this._lastScreenWidth = width;
+                this._lastScreenHeight = height;
                 this._blackScreenFrame = Buffer.concat([
                     Buffer.alloc(width * height, 16),
-                    Buffer.alloc(width * height / 2, 128)
+                    Buffer.alloc(Math.round(width * height / 2), 128)
                 ]);
+            }
+
+            if (!this._ffmpegStarted) {
                 this._screenReady = true;
-                this._screenQueue.push(Buffer.from(data));
+                this._screenQueue.push({ width, height, data: Buffer.from(data) });
                 this._trySpawnFFmpeg();
                 return;
             }
 
-            // Guard: skip any frame whose byte length doesn't match what FFmpeg
-            // was told to expect. This prevents "Invalid buffer size" errors that
-            // occur when the sender briefly changes resolution or sends a partial frame.
-            const frameSize = data.byteLength;
-            if (this._expectedScreenFrameSize && frameSize !== this._expectedScreenFrameSize) {
-                return;
-            }
-
-            const pipeIdx = this._screenPipeIdx;
-            if (pipeIdx != null && this.ffmpeg?.stdio[pipeIdx]?.writable) {
-                try { this.ffmpeg.stdio[pipeIdx].write(Buffer.from(data)); } catch (_) { }
-            }
+            this._writeVideoFrame('screen', this._screenPipeIdx, width, height, data, this._screenWidth, this._screenHeight);
         });
     }
 
@@ -349,25 +438,25 @@ class RecordingSession {
             const { width, height, data } = frame;
             this._lastCameraFrameTime = Date.now();
 
+            // Clone the data explicitly because WebRTC buffers are volatile
+            this._lastCameraFrameData = Buffer.from(data);
+
+            if (this._lastCameraWidth !== width || this._lastCameraHeight !== height) {
+                this._lastCameraWidth = width;
+                this._lastCameraHeight = height;
+                this._blackFrame = Buffer.concat([
+                    Buffer.alloc(width * height, 16),
+                    Buffer.alloc(Math.round(width * height / 2), 128)
+                ]);
+            }
+
             if (!this._ffmpegStarted) {
-                this._cameraWidth = width;
-                this._cameraHeight = height;
-                // Store the locked-in expected frame size (YUV420p = w * h * 1.5)
-                this._expectedCameraFrameSize = Math.round(width * height * 1.5);
-                this._cameraQueue.push(Buffer.from(data));
+                this._cameraQueue.push({ width, height, data: Buffer.from(data) });
+                this._trySpawnFFmpeg();
                 return;
             }
 
-            // Guard: skip frames that don't match the declared dimensions.
-            const frameSize = data.byteLength;
-            if (this._expectedCameraFrameSize && frameSize !== this._expectedCameraFrameSize) {
-                return;
-            }
-
-            const pipeIdx = this._cameraPipeIdx;
-            if (pipeIdx != null && this.ffmpeg?.stdio[pipeIdx]?.writable) {
-                try { this.ffmpeg.stdio[pipeIdx].write(Buffer.from(data)); } catch (_) { }
-            }
+            this._writeVideoFrame('camera', this._cameraPipeIdx, width, height, data, this._cameraWidth, this._cameraHeight);
         });
     }
 
@@ -430,19 +519,21 @@ class RecordingSession {
         this._ffmpegStarted = true;
         this._spawnTimer = null;
 
-        const hasScreen = !!this.screenSink;
-        const hasCameraTrack = !!this.cameraSink;
-        const hasAudio = this.audioSinks.size > 0;
+        // Force a dual-pane layout structure regardless of what is actually running at the start.
+        // We always allocate Pipe 3 for Screen and Pipe 4 for Camera.
+        // If they don't logically exist, their respective _fillerIntervals will pump black frames into them.
+        let hasScreen = true; // Always reserve screen pipe
+        let hasCameraTrack = true; // Always reserve camera pipe
+        let hasAudio = this.audioSinks.size > 0;
+
+        if (!hasAudio) {
+            hasAudio = true; // Always include audio pipe
+        }
 
         // When screen is present, ALWAYS include a camera PiP pipe — even if no
         // real camera track has arrived yet. The black-frame filler will drive it
         // until (and whenever) the host actually turns their camera on.
         const includeCameraPip = hasScreen;
-
-        if (!hasScreen && !hasCameraTrack && !hasAudio) {
-            console.log(`[Recorder] No tracks arrived in time. Aborting FFmpeg spawn.`);
-            return;
-        }
 
         const sw = this._screenWidth;
         const sh = this._screenHeight;
@@ -496,8 +587,7 @@ class RecordingSession {
         }
 
         // ── Video Layout ─────────────────────────────────────────────────────────
-        // When both screen and camera exist the output is a side-by-side composition
-        // at 1920×1080 so neither panel covers the other:
+        // We ALWAYS use the side-by-side composition at 1920×1080:
         //
         //   ┌──────────────────────┬──────────┐
         //   │                      │          │
@@ -507,30 +597,26 @@ class RecordingSession {
         //   │                      │   25%)   │
         //   └──────────────────────┴──────────┘
         //
-        // Each panel uses force_original_aspect_ratio=decrease + pad so any source
-        // resolution is letter/pillar-boxed into its slot without cropping.
-        if (hasScreen && (includeCameraPip || hasCameraTrack) && this._cameraPipeIdx != null) {
-            const outW = 1920, outH = 1080;
-            const scrPanelW = Math.round(outW * 0.75); // 1440
-            const camPanelW = outW - scrPanelW;        // 480
-            const screenIdx = this._screenPipeIdx - 3;
-            const cameraIdx = this._cameraPipeIdx - 3;
+        // If screen is off, the screen filler pumps 1920x1080 black frames which
+        // shrink into the 1440x1080 hole.
+        // If camera is off, the camera filler pumps 1280x720 black frames which
+        // shrink into the 480x1080 hole.
+        const outW = 1920, outH = 1080;
+        const scrPanelW = Math.round(outW * 0.75); // 1440
+        const camPanelW = outW - scrPanelW;        // 480
+        const screenIdx = this._screenPipeIdx - 3;
+        const cameraIdx = this._cameraPipeIdx - 3;
 
-            // Each scale filter shrinks to fit the panel while preserving aspect ratio,
-            // then pad fills any remaining space with black.
-            const scrFilter = `[${screenIdx}:v]scale=${scrPanelW}:${outH}:force_original_aspect_ratio=decrease,` +
-                `pad=${scrPanelW}:${outH}:(ow-iw)/2:(oh-ih)/2:black[scr]`;
-            const camFilter = `[${cameraIdx}:v]scale=${camPanelW}:${outH}:force_original_aspect_ratio=decrease,` +
-                `pad=${camPanelW}:${outH}:(ow-iw)/2:(oh-ih)/2:black[cam]`;
-            const stackFilter = `[scr][cam]hstack=inputs=2[out]`;
+        // Each scale filter shrinks to fit the panel while preserving aspect ratio,
+        // then pad fills any remaining space with black.
+        const scrFilter = `[${screenIdx}:v]scale=${scrPanelW}:${outH}:force_original_aspect_ratio=decrease,` +
+            `pad=${scrPanelW}:${outH}:(ow-iw)/2:(oh-ih)/2:black[scr]`;
+        const camFilter = `[${cameraIdx}:v]scale=${camPanelW}:${outH}:force_original_aspect_ratio=decrease,` +
+            `pad=${camPanelW}:${outH}:(ow-iw)/2:(oh-ih)/2:black[cam]`;
+        const stackFilter = `[scr][cam]hstack=inputs=2[out]`;
 
-            args.push('-filter_complex', `${scrFilter};${camFilter};${stackFilter}`);
-            videoMap = '[out]';
-        } else if (hasScreen) {
-            videoMap = `${this._screenPipeIdx - 3}:v`;
-        } else if (this._cameraPipeIdx != null) {
-            videoMap = `${this._cameraPipeIdx - 3}:v`;
-        }
+        args.push('-filter_complex', `${scrFilter};${camFilter};${stackFilter}`);
+        videoMap = '[out]';
 
         if (hasAudio) {
             audioMap = `${this._audioPipeIdx - 3}:a`;
@@ -550,31 +636,32 @@ class RecordingSession {
         this.ffmpeg = spawn('ffmpeg', args, { stdio });
 
         // ── Camera filler ────────────────────────────────────────────────────
-        // Sends black frames at ~30 fps whenever the host's camera is off.
-        // Runs whenever we have a camera pipe (real track OR PiP slot).
-        if (this._cameraPipeIdx != null) {
-            this._fillerInterval = setInterval(() => {
-                const now = Date.now();
-                if (now - this._lastCameraFrameTime > 100 && this.ffmpeg?.stdio[this._cameraPipeIdx]?.writable) {
-                    try { this.ffmpeg.stdio[this._cameraPipeIdx].write(this._blackFrame); } catch (_) { }
-                }
-            }, 33); // ~30 fps
-        }
+        // Sends fallback frames at ~30 fps. If the camera is still on but dropped
+        // a frame, it duplicates the last real frame so it doesn't flicker black.
+        // If the camera is completely OFF, it sends pure black.
+        this._fillerInterval = setInterval(() => {
+            const now = Date.now();
+            if (now - this._lastCameraFrameTime > 100) {
+                const w = this._lastCameraWidth || this._cameraWidth;
+                const h = this._lastCameraHeight || this._cameraHeight;
+                const fallbackFrame = (this.cameraSink && this._lastCameraFrameData) ? this._lastCameraFrameData : this._blackFrame;
+                this._writeVideoFrame('camera', this._cameraPipeIdx, w, h, fallbackFrame, this._cameraWidth, this._cameraHeight);
+            }
+        }, 33); // ~30 fps
 
         // ── Screen filler ────────────────────────────────────────────────────
-        // Sends a black screen frame at ~30 fps whenever the screen share is
-        // paused or stopped mid-recording. This is what prevents the
-        // "audio-only file" bug: without this, FFmpeg's rawvideo demuxer
-        // blocks on pipe:3 when frames stop arriving, and the muxer then
-        // produces a file that only contains the audio that continued to flow.
-        if (hasScreen) {
-            this._screenFillerInterval = setInterval(() => {
-                const now = Date.now();
-                if (now - this._lastScreenFrameTime > 100 && this.ffmpeg?.stdio[this._screenPipeIdx]?.writable) {
-                    try { this.ffmpeg.stdio[this._screenPipeIdx].write(this._blackScreenFrame); } catch (_) { }
-                }
-            }, 33); // ~30 fps
-        }
+        // Sends fallback frames at ~30 fps. WebRTC Screen sharing is inherently
+        // low/variable framerate. If the stream is active, we MUST duplicate
+        // the last known frame when idle so the background doesn't turn black.
+        this._screenFillerInterval = setInterval(() => {
+            const now = Date.now();
+            if (now - this._lastScreenFrameTime > 100) {
+                const w = this._lastScreenWidth || this._screenWidth;
+                const h = this._lastScreenHeight || this._screenHeight;
+                const fallbackFrame = (this.screenSink && this._lastScreenFrameData) ? this._lastScreenFrameData : this._blackScreenFrame;
+                this._writeVideoFrame('screen', this._screenPipeIdx, w, h, fallbackFrame, this._screenWidth, this._screenHeight);
+            }
+        }, 33); // ~30 fps
 
         // ── Audio silence filler ─────────────────────────────────────────────
         // Writes PCM zeros (silence) every 10ms when the host mutes their mic.
@@ -597,20 +684,18 @@ class RecordingSession {
             console.error('[Recorder] FFmpeg error:', err.message);
         });
 
-        // Drain queued screen frames — skip any that don't match the locked-in size
+        // Drain queued screen frames
         if (hasScreen) {
-            for (const buf of this._screenQueue) {
-                if (this._expectedScreenFrameSize && buf.byteLength !== this._expectedScreenFrameSize) continue;
-                try { this.ffmpeg.stdio[this._screenPipeIdx].write(buf); } catch (_) { }
+            for (const item of this._screenQueue) {
+                this._writeVideoFrame('screen', this._screenPipeIdx, item.width, item.height, item.data, this._screenWidth, this._screenHeight);
             }
             this._screenQueue = [];
         }
 
-        // Drain queued camera frames — skip any that don't match the locked-in size
+        // Drain queued camera frames
         if (this._cameraPipeIdx != null) {
-            for (const buf of this._cameraQueue) {
-                if (this._expectedCameraFrameSize && buf.byteLength !== this._expectedCameraFrameSize) continue;
-                try { this.ffmpeg.stdio[this._cameraPipeIdx].write(buf); } catch (_) { }
+            for (const item of this._cameraQueue) {
+                this._writeVideoFrame('camera', this._cameraPipeIdx, item.width, item.height, item.data, this._cameraWidth, this._cameraHeight);
             }
             this._cameraQueue = [];
         }
@@ -680,8 +765,8 @@ class RecordingSession {
             });
         }
 
-        // Close wrtc peer
-        try { this.peer?.close(); } catch (_) { }
+        sfuModule.sfuEvents.off('new-stream', this._newStreamListener);
+        sfuModule.sfuEvents.off('stream-stopped', this._streamStoppedListener);
 
         console.log(`[Recorder] Recording saved: ${this.filePath}`);
         return this.filePath;
@@ -696,12 +781,15 @@ class RecordingSession {
         try { this.cameraSink?.stop(); } catch (_) { }
         this.audioSinks.forEach(sink => { try { sink.stop(); } catch (_) { } });
         this.audioSinks.clear();
+        sfuModule.sfuEvents.off('new-stream', this._newStreamListener);
+        sfuModule.sfuEvents.off('stream-stopped', this._streamStoppedListener);
+        try { this._screenScaler?.kill('SIGKILL'); } catch (_) { }
+        try { this._cameraScaler?.kill('SIGKILL'); } catch (_) { }
         try { this.ffmpeg?.kill('SIGKILL'); } catch (_) { }
-        try { this.peer?.close(); } catch (_) { }
     }
 }
 
 // ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
-module.exports = { startRecording, stopRecording, getStatus, RECORDINGS_DIR };
+module.exports = { startRecording, stopRecording, dequeueSession, getStatus, RECORDINGS_DIR };

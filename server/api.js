@@ -55,16 +55,12 @@ router.post('/rooms/join', (req, res) => {
     return res.status(404).json({ error: 'Room not found or inactive' });
   }
 
-  const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  roomsModule.joinRoom(roomId, userId);
-
   res.json({
     success: true,
     room: {
       id: room.id,
       name: room.name
-    },
-    userId: userId
+    }
   });
 });
 

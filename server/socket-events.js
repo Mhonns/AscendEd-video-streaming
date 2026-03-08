@@ -61,30 +61,29 @@ function initSocketEvents(io) {
 
       socket.emit('room-joined', roomJoinedData);
 
-      // Only notify other users if the joining user has a saved profile
-      if (userProfile && userProfile.name && userProfile.name !== 'Anonymous') {
-        const userJoinedData = {
-          userId: userId,
-          socketId: socket.id,
-          user: userProfile,
-          participantCount: room.participants.size
-        };
+      // Notify other users that a new user has joined
+      const userJoinedData = {
+        userId: userId,
+        socketId: socket.id,
+        user: userProfile,
+        participantCount: room.participants.size
+      };
 
-        socket.to(roomId).emit('user-joined', userJoinedData);
-      }
+      socket.to(roomId).emit('user-joined', userJoinedData);
 
       // Send existing users to the new user
       const existingUsers = [];
       socketConnections.forEach((connInfo, sockId) => {
         if (connInfo.roomId === roomId && connInfo.userId !== userId) {
-          const existingUser = roomsModule.getUserProfile(connInfo.userId);
-          if (existingUser && existingUser.name && existingUser.name !== 'Anonymous') {
-            existingUsers.push({
-              userId: connInfo.userId,
-              socketId: sockId,
-              user: existingUser
-            });
-          }
+          const existingUser = roomsModule.getUserProfile(connInfo.userId) || { userId: connInfo.userId, name: 'Anonymous' };
+          existingUsers.push({
+            userId: connInfo.userId,
+            socketId: sockId,
+            user: {
+              ...existingUser,
+              name: existingUser.name || 'Anonymous'
+            }
+          });
         }
       });
 
@@ -94,7 +93,7 @@ function initSocketEvents(io) {
           roomId: roomId
         });
 
-        // Send current media states so the new user can render correct mic/camera icons
+        // Send current media states so the new user can render correct mic/camera/screen icons
         const mediaStates = existingUsers.map(eu => ({
           userId: eu.userId,
           ...roomsModule.getUserMediaState(eu.userId)
@@ -149,38 +148,43 @@ function initSocketEvents(io) {
 
       console.log(`[SocketEvents] User ${userId} ${handsUp ? 'raised' : 'lowered'} hand in room ${roomId}`);
 
+      // Persist hands-up state
+      roomsModule.setUserMediaState(userId, { handsUp: !!handsUp });
+
       // Broadcast to all users in the room (including sender for confirmation)
       io.to(roomId).emit('user-handsup-status', {
         userId,
-        handsUp
+        handsUp: !!handsUp
       });
     });
 
-    // Handle mic/camera toggle — persist on server and broadcast to all
-    socket.on('toggle-media-status', (data) => {
-      const { roomId, userId, kind, enabled } = data;
+    // Handle media state update — client sends full state, server persists and broadcasts
+    socket.on('request-media-update', (data) => {
+      const { roomId, userId, audioOn, videoOn, screenOn } = data;
 
-      if (!roomId || !userId || !kind) {
-        console.warn('[SocketEvents] Invalid toggle-media-status data:', data);
+      if (!roomId || !userId) {
+        console.warn('[SocketEvents] Invalid request-media-update data:', data);
         return;
       }
 
       const room = roomsModule.getRoom(roomId);
       if (!room || !room.isActive) return;
 
-      // Persist on server
-      const update = kind === 'audio'
-        ? { audioOn: !!enabled }
-        : { videoOn: !!enabled };
-      roomsModule.setUserMediaState(userId, update);
+      // Persist the full state on the server
+      const state = roomsModule.setUserMediaState(userId, {
+        audioOn: !!audioOn,
+        videoOn: !!videoOn,
+        screenOn: !!screenOn
+      });
 
-      console.log(`[SocketEvents] User ${userId} ${kind} ${enabled ? 'ON' : 'OFF'} in room ${roomId}`);
+      console.log(`[SocketEvents] Media update for ${userId} in room ${roomId}: audio=${state.audioOn}, video=${state.videoOn}, screen=${state.screenOn}`);
 
-      // Broadcast to everyone in the room (sender included for confirmation)
-      io.to(roomId).emit('user-mute-status', {
+      // Broadcast the complete state to everyone in the room (including sender)
+      io.to(roomId).emit('user-media-update', {
         userId,
-        kind,  // 'audio' | 'video'
-        muted: !enabled
+        audioOn: state.audioOn,
+        videoOn: state.videoOn,
+        screenOn: state.screenOn
       });
     });
 
@@ -207,6 +211,14 @@ function initSocketEvents(io) {
       });
     });
   });
+
+  // ── Periodic media-state heartbeat ─────────────────────────────────────
+  // Every 60 seconds, re-broadcast the authoritative media state for every
+  // participant in every active room. This self-heals icon drift caused by
+  // missed events, brief disconnects, or race conditions on join.
+  const MEDIA_SYNC_INTERVAL_MS = 60_000;
+  setInterval(() => broadcastMediaStateSync(io), MEDIA_SYNC_INTERVAL_MS);
+  console.log(`[SocketEvents] Media-state heartbeat started (every ${MEDIA_SYNC_INTERVAL_MS / 1000}s)`);
 }
 
 /**
@@ -282,8 +294,36 @@ function handleChatMessage(socket, io, data) {
   }
 }
 
+/**
+ * Broadcast authoritative media states for all participants in every active room.
+ * Called by the 60-second heartbeat interval and can be invoked directly for
+ * on-demand re-sync (e.g. after a recorder session ends).
+ */
+function broadcastMediaStateSync(io) {
+  let roomCount = 0;
+  let userCount = 0;
+
+  roomsModule.rooms.forEach((room, roomId) => {
+    if (!room.isActive || room.participants.size === 0) return;
+
+    const mediaStates = Array.from(room.participants).map(uid => ({
+      userId: uid,
+      ...roomsModule.getUserMediaState(uid)
+    }));
+
+    io.to(roomId).emit('sync-media-states', { mediaStates });
+    roomCount++;
+    userCount += mediaStates.length;
+  });
+
+  if (roomCount > 0) {
+    console.log(`[SocketEvents] Heartbeat: synced media states for ${userCount} user(s) across ${roomCount} room(s)`);
+  }
+}
+
 module.exports = {
   initSocketEvents,
+  broadcastMediaStateSync,
   socketConnections
 };
 

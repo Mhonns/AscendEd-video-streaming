@@ -7,7 +7,7 @@ const chatModule = require('./chat');
 const sfuModule = require('./sfu');
 const rooms = new Map();
 const users = new Map(); // Store user profiles: userId -> { name, profileImage }
-const userMediaState = new Map(); // Store media state: userId -> { audioOn, videoOn }
+const userMediaState = new Map(); // Store media state: userId -> { audioOn, videoOn, screenOn }
 
 /**
  * Create a new room
@@ -91,12 +91,20 @@ function getRoomUsers(roomId) {
 
   return Array.from(room.participants)
     .map(userId => {
-      const profile = users.get(userId);
-      if (!profile || !profile.name || profile.name === 'Anonymous') return null;
-      const media = userMediaState.get(userId) || { audioOn: false, videoOn: false };
-      return { ...profile, audioOn: media.audioOn, videoOn: media.videoOn };
-    })
-    .filter(Boolean);
+      // Return a default profile if none exists
+      const profile = users.get(userId) || { userId, name: 'Anonymous' };
+      const media = userMediaState.get(userId) || { audioOn: false, videoOn: false, screenOn: false, handsUp: false };
+
+      return {
+        ...profile,
+        userId, // Ensure userId is always present
+        name: profile.name || 'Anonymous',
+        audioOn: !!media.audioOn,
+        videoOn: !!media.videoOn,
+        screenOn: !!media.screenOn,
+        handsUp: !!media.handsUp
+      };
+    });
 }
 
 /**
@@ -129,11 +137,13 @@ function isUserInRoom(roomId, userId) {
 /**
  * Set a user's media state (audioOn / videoOn)
  */
-function setUserMediaState(userId, { audioOn, videoOn }) {
-  const current = userMediaState.get(userId) || { audioOn: false, videoOn: false };
+function setUserMediaState(userId, { audioOn, videoOn, screenOn, handsUp }) {
+  const current = userMediaState.get(userId) || { audioOn: false, videoOn: false, screenOn: false, handsUp: false };
   userMediaState.set(userId, {
     audioOn: audioOn !== undefined ? !!audioOn : current.audioOn,
-    videoOn: videoOn !== undefined ? !!videoOn : current.videoOn
+    videoOn: videoOn !== undefined ? !!videoOn : current.videoOn,
+    screenOn: screenOn !== undefined ? !!screenOn : current.screenOn,
+    handsUp: handsUp !== undefined ? !!handsUp : current.handsUp
   });
   return userMediaState.get(userId);
 }
@@ -142,7 +152,7 @@ function setUserMediaState(userId, { audioOn, videoOn }) {
  * Get a user's media state
  */
 function getUserMediaState(userId) {
-  return userMediaState.get(userId) || { audioOn: false, videoOn: false };
+  return userMediaState.get(userId) || { audioOn: false, videoOn: false, screenOn: false, handsUp: false };
 }
 
 /**
