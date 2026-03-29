@@ -5,6 +5,7 @@
 
 const chatModule = require('./chat');
 const sfuModule = require('./sfu');
+const recorder = require('./recorder');
 const rooms = new Map();
 const users = new Map(); // Store user profiles: userId -> { name, profileImage }
 const userMediaState = new Map(); // Store media state: userId -> { audioOn, videoOn, screenOn }
@@ -12,14 +13,19 @@ const userMediaState = new Map(); // Store media state: userId -> { audioOn, vid
 /**
  * Create a new room
  */
-function createRoom(roomId, meetingName, hostId) {
+function createRoom(roomId, meetingName, hostId, password, initialAdminState) {
   const room = {
     id: roomId,
     name: meetingName || 'Untitled Meeting',
     hostId: hostId,
+    password: password || null,   // null = no password required
     participants: new Set([hostId]),
     createdAt: new Date(),
-    isActive: true
+    isActive: true,
+    adminState: Object.assign(
+      { forceMute: false, forceCamera: false, chatDisabled: false, emojiDisabled: false },
+      initialAdminState || {}
+    )
   };
   rooms.set(roomId, room);
   return room;
@@ -63,6 +69,16 @@ function leaveRoom(roomId, userId) {
     if (room.participants.size === 0) {
       room.isActive = false;
       chatModule.clearRoomMessages(roomId);
+
+      // Stop any active recording immediately — streams are already gone
+      const recStatus = recorder.getStatus(roomId);
+      if (recStatus.active) {
+        console.log(`[Rooms] Last participant left room "${roomId}" — stopping active recording`);
+        recorder.stopRecording(roomId).catch(err =>
+          console.error(`[Rooms] Error stopping recording on room empty:`, err.message)
+        );
+      }
+
       setTimeout(() => {
         const currentRoom = rooms.get(roomId);
         if (currentRoom && currentRoom.participants.size === 0) {
@@ -77,6 +93,14 @@ function leaveRoom(roomId, userId) {
  * Destroy a room and clean up all associated resources
  */
 function destroyRoom(roomId) {
+  // Safety net: stop any still-running recording before wiping the room
+  const recStatus = recorder.getStatus(roomId);
+  if (recStatus.active) {
+    console.log(`[Rooms] destroyRoom: stopping lingering recording for room "${roomId}"`);
+    recorder.stopRecording(roomId).catch(err =>
+      console.error(`[Rooms] destroyRoom: error stopping recording:`, err.message)
+    );
+  }
   chatModule.clearRoomMessages(roomId);
   sfuModule.destroyRoomStreams(roomId);
   rooms.delete(roomId);

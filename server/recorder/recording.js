@@ -15,6 +15,10 @@
 
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+
+const RECORDINGS_DIR = path.join(__dirname, 'recordings');
 
 const roomsModule = require('../rooms');
 const recorder = require('.');
@@ -123,5 +127,60 @@ router.get('/status/:roomId', (req, res) => {
     res.json(status);
 });
 
+// GET /api/recording/list
+// Returns all recordings in the recordings directory, newest first.
+router.get('/list', (req, res) => {
+    try {
+        if (!fs.existsSync(RECORDINGS_DIR)) {
+            return res.json({ success: true, recordings: [] });
+        }
+
+        const files = fs.readdirSync(RECORDINGS_DIR)
+            .filter(f => f.endsWith('.mp4'))
+            .map(f => {
+                const filePath = path.join(RECORDINGS_DIR, f);
+                const stat = fs.statSync(filePath);
+                return {
+                    name: f,
+                    size: stat.size,
+                    createdAt: stat.mtime.toISOString()
+                };
+            })
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json({ success: true, recordings: files });
+    } catch (err) {
+        console.error('[RecordingRoute] Error listing recordings:', err.message);
+        res.status(500).json({ error: 'Failed to list recordings' });
+    }
+});
+
+// GET /api/recording/download/:filename
+// Streams an individual recording file as a downloadable attachment.
+router.get('/download/:filename', (req, res) => {
+    const { filename } = req.params;
+
+    // Basic security: only allow simple filenames, no path traversal
+    if (!filename || !/^[\w\-. ]+\.mp4$/i.test(filename)) {
+        return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filePath = path.join(RECORDINGS_DIR, filename);
+
+    // Ensure resolved path is still inside RECORDINGS_DIR
+    if (!filePath.startsWith(RECORDINGS_DIR + path.sep) && filePath !== RECORDINGS_DIR) {
+        return res.status(400).json({ error: 'Invalid path' });
+    }
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Recording not found' });
+    }
+
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'video/mp4');
+    res.sendFile(filePath);
+});
+
 module.exports = router;
 module.exports.setIo = setIo;
+

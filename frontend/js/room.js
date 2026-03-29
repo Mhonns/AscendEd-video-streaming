@@ -111,10 +111,41 @@ async function initRoom() {
   // Initialize recording module (shows/hides the record button based on host status)
   window.RecordingModule?.init?.(roomId, userId, data.room.hostId);
 
+  // Apply settings persisted from the landing page
+  applyStartupSettings();
+
   const copyBtn = document.getElementById('copy-room-id-btn');
+
   if (copyBtn) {
     copyBtn.addEventListener('click', () => window.RoomUtils.copyRoomId(roomId));
   }
+}
+
+/**
+ * Apply persistent settings that should take effect as soon as the room loads.
+ * Only side-effects that are safe to apply immediately are done here;
+ * others (e.g. auto-recording) require the recording module to be ready so
+ * we defer them slightly.
+ *
+ * NOTE: disableChat and disableEmoji are admin room-level controls — they are
+ * applied exclusively via the server's adminState in the 'room-joined' event
+ * (handled in socket-handler.js) so that only the server is the source of truth.
+ */
+function applyStartupSettings() {
+  if (!window.AppSettings) return;
+  const s = window.AppSettings.getAll();
+
+  // Auto-recording — host only, wait a moment for socket & recording module to be ready
+  if (s.autoRecording && window.RecordingModule?.isHost?.()) {
+    setTimeout(() => {
+      if (!window.RecordingModule?.isActive?.()) {
+        console.log('[Room] Auto-recording: starting...');
+        window.RecordingModule?.startRecording?.();
+      }
+    }, 2500);
+  }
+
+  console.log('[Room] Startup settings applied:', s);
 }
 
 // Initialize when page loads

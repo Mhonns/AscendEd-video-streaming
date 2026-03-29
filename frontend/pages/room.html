@@ -136,6 +136,160 @@
   <!-- Emoji Reactions Container (for floating emojis) -->
   <div class="emoji-reactions-container" id="emoji-reactions-container"></div>
 
+  <!-- Settings Modal -->
+  <div class="settings-modal" id="settings-modal">
+    <div class="settings-modal-content">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="close-settings-btn" id="close-settings-btn">&times;</button>
+      </div>
+      <div class="settings-body">
+
+        <!-- Voice & Video Section -->
+        <div class="settings-section">
+          <h3>Voice & Video</h3>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Noise Cancelling <span
+                  style="font-size: 11px; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 8px; margin-left: 6px;">Developing</span></span>
+              <span class="setting-desc">Reduce background noise</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settings-noise-cancelling" disabled>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Test Mic / Camera</span>
+              <span class="setting-desc">Check your microphone and camera locally</span>
+            </div>
+            <button class="settings-action-btn" id="test-mic-camera-btn">Test</button>
+          </div>
+          <!-- Inline test panel (hidden by default) -->
+          <div class="mic-camera-test-panel" id="mic-camera-test-panel">
+            <video id="test-video" autoplay muted playsinline></video>
+            <div class="test-volume-wrap">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:rgba(255,255,255,0.5);flex-shrink:0">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+              <div class="test-volume-bar"><div class="test-volume-fill" id="test-volume-fill"></div></div>
+            </div>
+            <button class="settings-action-btn danger" id="test-mic-camera-stop-btn">Stop Test</button>
+          </div>
+        </div>
+
+        <!-- Room Section -->
+        <div class="settings-section">
+          <h3>Room</h3>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Auto Recording</span>
+              <span class="setting-desc">Automatically record the meeting</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settings-auto-recording">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Optimize Video Streaming
+                <span
+                  style="font-size: 11px; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 8px; margin-left: 6px;">Developing</span>
+              </span>
+              <span class="setting-desc">Enhance performance for video distribution</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settings-optimize-video" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Set Up Password</span>
+              <span class="setting-desc">Require password to join room</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settings-password-toggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-item password-input-container" id="password-input-container" style="display: none;">
+            <input type="text" class="settings-input" id="room-password-input"
+              placeholder="Randomly generated password">
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Max User</span>
+              <span class="setting-desc">Limit the number of participants</span>
+            </div>
+            <input type="number" class="settings-input small-input" id="settings-max-user" value="50" min="2" max="50">
+          </div>
+        </div>
+
+        <!-- Admin Section -->
+        <div class="settings-section" id="admin-settings-section" style="display: none;">
+          <h3>Admin <span class="badge">Host Only</span></h3>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Force Mute</span>
+              <span class="setting-desc">Mute everyone in the room</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settings-force-mute">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Force Close Camera</span>
+              <span class="setting-desc">Turn off everyone's camera</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settings-force-camera">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Disable Chat</span>
+              <span class="setting-desc">Prevent users from sending text messages</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settings-disable-chat">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Disable Emoji</span>
+              <span class="setting-desc">Prevent users from using reactions</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settings-disable-emoji">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Support Section -->
+        <div class="settings-section">
+          <h3>Support</h3>
+          <div class="setting-item support-item">
+            <div class="setting-info">
+              <span class="setting-title">Hotline</span>
+              <span class="setting-desc">Tel 0907409067</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <!-- Name Entry Modal for Anonymous Users -->
   <div class="name-modal" id="name-modal">
     <div class="name-modal-content">

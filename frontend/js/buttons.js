@@ -43,6 +43,7 @@ function initButtons() {
   initFullscreenButton();
   initSettingsButton();
   initLeaveButton();
+  initMicCameraTest();
 }
 
 // Toggle microphone
@@ -385,13 +386,185 @@ function initFullscreenButton() {
 // Settings button
 function initSettingsButton() {
   const settingsBtn = document.getElementById('settings-btn');
-  if (settingsBtn) {
+  const settingsModal = document.getElementById('settings-modal');
+  const closeSettingsBtn = document.getElementById('close-settings-btn');
+
+  if (settingsBtn && settingsModal) {
     settingsBtn.addEventListener('click', function () {
-      // TODO: Implement settings functionality
-      console.log('Settings clicked');
+      settingsModal.classList.add('show');
+
+      // Show/hide admin section based on host status
+      const isHost = typeof window.RecordingModule?.isHost === 'function' ? window.RecordingModule.isHost() : false;
+      const adminSection = document.getElementById('admin-settings-section');
+      if (adminSection) {
+        adminSection.style.display = isHost ? 'flex' : 'none';
+      }
+
+      // Load persisted settings into the room modal each time it opens
+      _loadRoomSettings();
     });
   }
+
+  if (closeSettingsBtn && settingsModal) {
+    closeSettingsBtn.addEventListener('click', function () {
+      settingsModal.classList.remove('show');
+      stopMicCameraTest();
+      const testBtnEl = document.getElementById('test-mic-camera-btn');
+      if (testBtnEl) testBtnEl.textContent = 'Test';
+    });
+  }
+
+  if (settingsModal) {
+    settingsModal.addEventListener('click', function (e) {
+      if (e.target === settingsModal) {
+        settingsModal.classList.remove('show');
+        stopMicCameraTest();
+        const testBtnEl = document.getElementById('test-mic-camera-btn');
+        if (testBtnEl) testBtnEl.textContent = 'Test';
+      }
+    });
+  }
+
+  // Attach persistent change listeners (only once, on init)
+  _attachRoomSettingsListeners();
 }
+
+/** Populate all room-settings controls from AppSettings */
+function _loadRoomSettings() {
+  if (!window.AppSettings) return;
+  const s = window.AppSettings.getAll();
+
+  _setToggle('settings-noise-cancelling', s.noiseCancelling);
+  _setToggle('settings-auto-recording', s.autoRecording);
+  _setToggle('settings-optimize-video', s.optimizeVideoStreaming);
+  _setToggle('settings-password-toggle', s.passwordEnabled);
+  _setToggle('settings-force-mute', s.forceMute);
+  _setToggle('settings-force-camera', s.forceCloseCamera);
+  _setToggle('settings-disable-chat', s.disableChat);
+  _setToggle('settings-disable-emoji', s.disableEmoji);
+
+  const maxUserInput = document.getElementById('settings-max-user');
+  if (maxUserInput) maxUserInput.value = s.maxUser;
+
+  const passwordInputContainer = document.getElementById('password-input-container');
+  const passwordInput = document.getElementById('room-password-input');
+  if (passwordInputContainer && passwordInput) {
+    if (s.passwordEnabled) {
+      passwordInputContainer.style.display = 'flex';
+      passwordInput.value = s.roomPassword || '';
+    } else {
+      passwordInputContainer.style.display = 'none';
+    }
+  }
+}
+
+function _setToggle(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.checked = !!value;
+}
+
+/** Wire every room settings control to AppSettings (runs once on init) */
+function _attachRoomSettingsListeners() {
+  if (!window.AppSettings) return;
+
+  function bindToggle(id, key, onChangeFn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function () {
+      window.AppSettings.set(key, this.checked);
+      console.log(`[Settings] ${key} = ${this.checked}`);
+      if (onChangeFn) onChangeFn(this.checked);
+    });
+  }
+
+  function bindInput(id, key) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const save = () => {
+      const val = el.type === 'number' ? Number(el.value) : el.value;
+      window.AppSettings.set(key, val);
+    };
+    el.addEventListener('input', save);
+    el.addEventListener('change', save);
+  }
+
+  // Voice & Video — noise cancelling is "Developing" / disabled; persist anyway
+  bindToggle('settings-noise-cancelling', 'noiseCancelling');
+
+  // Room
+  bindToggle('settings-auto-recording', 'autoRecording', (enabled) => {
+    // Trigger/stop recording immediately when toggled inside a live room
+    if (enabled && !window.RecordingModule?.isActive?.()) {
+      window.RecordingModule?.startRecording?.();
+    } else if (!enabled && window.RecordingModule?.isActive?.()) {
+      window.RecordingModule?.stopRecording?.();
+    }
+  });
+
+  bindToggle('settings-optimize-video', 'optimizeVideoStreaming');
+
+  bindToggle('settings-password-toggle', 'passwordEnabled', (checked) => {
+    const passwordInputContainer = document.getElementById('password-input-container');
+    const passwordInput = document.getElementById('room-password-input');
+    if (passwordInputContainer && passwordInput) {
+      if (checked) {
+        passwordInputContainer.style.display = 'flex';
+        if (!passwordInput.value) {
+          const generated = Math.random().toString(36).substring(2, 10);
+          passwordInput.value = generated;
+          window.AppSettings.set('roomPassword', generated);
+        }
+      } else {
+        passwordInputContainer.style.display = 'none';
+      }
+    }
+  });
+
+  bindInput('room-password-input', 'roomPassword');
+  bindInput('settings-max-user', 'maxUser');
+
+  // Admin
+  bindToggle('settings-force-mute', 'forceMute', (enabled) => {
+    const socket = window.SocketHandler?.getSocket();
+    const roomId = window.SocketHandler?.getCurrentRoomId();
+    const userId = localStorage.getItem('userId');
+    if (socket && roomId && userId) {
+      socket.emit('admin-force-mute', { roomId, userId, enabled });
+    }
+  });
+
+  bindToggle('settings-force-camera', 'forceCloseCamera', (enabled) => {
+    const socket = window.SocketHandler?.getSocket();
+    const roomId = window.SocketHandler?.getCurrentRoomId();
+    const userId = localStorage.getItem('userId');
+    if (socket && roomId && userId) {
+      socket.emit('admin-force-camera', { roomId, userId, enabled });
+    }
+  });
+
+  bindToggle('settings-disable-chat', 'disableChat', (enabled) => {
+    const socket = window.SocketHandler?.getSocket();
+    const roomId = window.SocketHandler?.getCurrentRoomId();
+    const userId = localStorage.getItem('userId');
+    if (socket && roomId && userId) {
+      // Server will verify host status then broadcast to ALL users (including host)
+      // _applyDisableChat in socket-handler.js handles the local UI update for everyone
+      socket.emit('admin-disable-chat', { roomId, userId, enabled });
+    }
+  });
+
+  bindToggle('settings-disable-emoji', 'disableEmoji', (enabled) => {
+    const socket = window.SocketHandler?.getSocket();
+    const roomId = window.SocketHandler?.getCurrentRoomId();
+    const userId = localStorage.getItem('userId');
+    if (socket && roomId && userId) {
+      // Server will verify host status then broadcast to ALL users (including host)
+      // _applyDisableEmoji in socket-handler.js handles the local UI update for everyone
+      socket.emit('admin-disable-emoji', { roomId, userId, enabled });
+    }
+  });
+}
+
 
 // Leave meeting
 function initLeaveButton() {
@@ -400,6 +573,9 @@ function initLeaveButton() {
 
   leaveBtn.addEventListener('click', function () {
     console.log('Leaving meeting...');
+
+    // Stop media test if still running
+    stopMicCameraTest();
 
     // Stop all media streams
     window.MediaModule?.stopAllMedia();
@@ -420,6 +596,109 @@ function initLeaveButton() {
     // Redirect to landing page
     window.location.href = '../index.html';
   });
+}
+
+// ─── Local Mic / Camera Test ───────────────────────────────────────────────
+let _testStream = null;
+let _testAudioCtx = null;
+let _testAnimFrame = null;
+
+function initMicCameraTest() {
+  const testBtn = document.getElementById('test-mic-camera-btn');
+  const stopBtn = document.getElementById('test-mic-camera-stop-btn');
+  if (!testBtn) return;
+
+  testBtn.addEventListener('click', async () => {
+    // If already testing, stop first
+    stopMicCameraTest();
+
+    testBtn.disabled = true;
+    testBtn.textContent = 'Starting…';
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      _testStream = stream;
+
+      // Show camera preview
+      const video = document.getElementById('test-video');
+      if (video) {
+        video.srcObject = stream;
+      }
+
+      // Volume meter + local echo via Web Audio
+      const fill = document.getElementById('test-volume-fill');
+      if (fill) {
+        _testAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = _testAudioCtx.createMediaStreamSource(stream);
+        const analyser = _testAudioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyser.connect(_testAudioCtx.destination); // echo mic to speakers
+        const data = new Uint8Array(analyser.frequencyBinCount);
+
+        function tick() {
+          analyser.getByteFrequencyData(data);
+          const avg = data.reduce((s, v) => s + v, 0) / data.length;
+          fill.style.width = Math.min(avg * 2, 100) + '%';
+          _testAnimFrame = requestAnimationFrame(tick);
+        }
+        tick();
+      }
+
+      // Expand panel
+      const panel = document.getElementById('mic-camera-test-panel');
+      if (panel) panel.classList.add('open');
+
+      testBtn.textContent = 'Restart';
+      testBtn.disabled = false;
+
+    } catch (err) {
+      console.error('[MicCamTest] Error:', err);
+      alert('Could not access camera/microphone. Please check your permissions.');
+      testBtn.textContent = 'Test';
+      testBtn.disabled = false;
+    }
+  });
+
+  if (stopBtn) {
+    stopBtn.addEventListener('click', () => {
+      stopMicCameraTest();
+      const testBtnEl = document.getElementById('test-mic-camera-btn');
+      if (testBtnEl) testBtnEl.textContent = 'Test';
+    });
+  }
+}
+
+function stopMicCameraTest() {
+  // Cancel volume animation
+  if (_testAnimFrame) {
+    cancelAnimationFrame(_testAnimFrame);
+    _testAnimFrame = null;
+  }
+
+  // Close AudioContext
+  if (_testAudioCtx) {
+    _testAudioCtx.close().catch(() => { });
+    _testAudioCtx = null;
+  }
+
+  // Stop all test tracks
+  if (_testStream) {
+    _testStream.getTracks().forEach(t => t.stop());
+    _testStream = null;
+  }
+
+  // Clear video
+  const video = document.getElementById('test-video');
+  if (video) video.srcObject = null;
+
+  // Reset volume bar
+  const fill = document.getElementById('test-volume-fill');
+  if (fill) fill.style.width = '0%';
+
+  // Collapse panel
+  const panel = document.getElementById('mic-camera-test-panel');
+  if (panel) panel.classList.remove('open');
 }
 
 // Export functions to global scope

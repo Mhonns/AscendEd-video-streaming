@@ -130,3 +130,82 @@ if (typeof module !== 'undefined' && module.exports) {
   window.getAPIURL = getAPIURL;
   window.resetServerURL = resetServerURL;
 }
+
+// ─────────────────────────────────────────────────────────────
+// AppSettings — shared settings store backed by localStorage
+// All setting keys and their defaults are declared here.
+// Both the landing page and the room page use this module.
+// ─────────────────────────────────────────────────────────────
+const APP_SETTINGS_KEY = 'appSettings';
+
+const DEFAULT_SETTINGS = {
+  // Voice & Video
+  noiseCancelling: false,
+
+  // Room
+  autoRecording: false,
+  optimizeVideoStreaming: true,
+  passwordEnabled: false,
+  roomPassword: '',
+  maxUser: 50,
+
+  // Admin (host only)
+  forceMute: false,
+  forceCloseCamera: false,
+  disableChat: false,
+  disableEmoji: false
+};
+
+const AppSettings = (() => {
+  /** Load settings object from localStorage (merged with defaults) */
+  function load() {
+    try {
+      const raw = localStorage.getItem(APP_SETTINGS_KEY);
+      if (raw) {
+        return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(raw));
+      }
+    } catch (e) {
+      console.warn('[AppSettings] Failed to parse settings:', e);
+    }
+    return Object.assign({}, DEFAULT_SETTINGS);
+  }
+
+  /** Persist the current settings object */
+  function _save(settings) {
+    try {
+      localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+      console.warn('[AppSettings] Failed to save settings:', e);
+    }
+  }
+
+  /** Get a single setting value */
+  function get(key) {
+    const s = load();
+    return key in s ? s[key] : DEFAULT_SETTINGS[key];
+  }
+
+  /** Set a single setting value and persist */
+  function set(key, value) {
+    const s = load();
+    s[key] = value;
+    _save(s);
+  }
+
+  /** Get all settings */
+  function getAll() {
+    return load();
+  }
+
+  /** Reset to defaults */
+  function reset() {
+    _save(Object.assign({}, DEFAULT_SETTINGS));
+  }
+
+  return { get, set, getAll, reset, DEFAULT_SETTINGS };
+})();
+
+// Expose globally
+if (typeof window !== 'undefined') {
+  window.AppSettings = AppSettings;
+}

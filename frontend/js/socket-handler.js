@@ -62,6 +62,21 @@ async function initSocket(roomId, userData) {
       }
     }
 
+    // Apply admin state for late joiners (chat/emoji disabled, etc.)
+    // Deferred slightly so RecordingModule.init() has run and isHost() is accurate.
+    if (data.adminState) {
+      const a = data.adminState;
+      const hasAnyAdminState = a.chatDisabled || a.emojiDisabled || a.forceMute || a.forceCamera;
+      if (hasAnyAdminState) {
+        setTimeout(() => {
+          if (a.chatDisabled) _applyDisableChat(true);
+          if (a.emojiDisabled) _applyDisableEmoji(true);
+          if (a.forceMute) _applyForceMute(true);
+          if (a.forceCamera) _applyForceCamera(true);
+        }, 800);
+      }
+    }
+
     // SFU: on join, POST to /consumer to consume current streams from other users
     if (window.SFUConsumeModule && typeof window.SFUConsumeModule.requestConsumeCurrentStreams === 'function') {
       try {
@@ -237,6 +252,28 @@ async function initSocket(roomId, userData) {
     }
   });
 
+  // ── Admin broadcast events (received by ALL participants) ─────────────────
+
+  socket.on('admin-force-mute', (data) => {
+    console.log('[SocketHandler] Admin force-mute:', data);
+    _applyForceMute(data.enabled);
+  });
+
+  socket.on('admin-force-camera', (data) => {
+    console.log('[SocketHandler] Admin force-camera:', data);
+    _applyForceCamera(data.enabled);
+  });
+
+  socket.on('admin-disable-chat', (data) => {
+    console.log('[SocketHandler] Admin disable-chat:', data);
+    _applyDisableChat(data.enabled);
+  });
+
+  socket.on('admin-disable-emoji', (data) => {
+    console.log('[SocketHandler] Admin disable-emoji:', data);
+    _applyDisableEmoji(data.enabled);
+  });
+
   /**
    * Initialize chat module
    */
@@ -247,9 +284,154 @@ async function initSocket(roomId, userData) {
   return socket;
 }
 
+// ── Admin action helpers ───────────────────────────────────────────────────
+
+/** Force-mute: stop mic for all non-host participants */
+function _applyForceMute(enabled) {
+  if (enabled) {
+    // Turn off mic if it's on
+    if (window.ButtonsModule?.getMicState?.()) {
+      window.MediaModule?.toggleMicrophone(false);
+      window.ButtonsModule?.setMicState?.(false);
+      // Update mic button UI
+      const micBtn = document.getElementById('mic-btn');
+      const micIcon = micBtn?.querySelector('img');
+      if (micBtn) micBtn.classList.add('off');
+      if (micIcon) micIcon.src = '../assets/icons/mic-off.svg';
+      window.ButtonsModule?.emitMediaUpdate?.();
+    }
+    // Grey-out the mic button so it can't be re-enabled
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn) {
+      micBtn.disabled = true;
+      micBtn.title = 'Muted by host';
+    }
+    _showAdminBanner('The host has muted everyone');
+  } else {
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn) {
+      micBtn.disabled = false;
+      micBtn.title = 'Toggle Microphone';
+    }
+    _showAdminBanner('You can unmute yourself');
+  }
+}
+
+/** Force-close camera: turn off camera for all participants */
+function _applyForceCamera(enabled) {
+  if (enabled) {
+    if (window.ButtonsModule?.getCameraState?.()) {
+      window.MediaModule?.stopCamera?.();
+      window.ButtonsModule?.setCameraState?.(false);
+      const cameraBtn = document.getElementById('camera-btn');
+      const cameraIcon = cameraBtn?.querySelector('img');
+      if (cameraBtn) cameraBtn.classList.add('off');
+      if (cameraIcon) cameraIcon.src = '../assets/icons/camera-off.svg';
+      window.ButtonsModule?.emitMediaUpdate?.();
+    }
+    const cameraBtn = document.getElementById('camera-btn');
+    if (cameraBtn) {
+      cameraBtn.disabled = true;
+      cameraBtn.title = 'Camera disabled by host';
+    }
+    _showAdminBanner('The host has turned off all cameras');
+  } else {
+    const cameraBtn = document.getElementById('camera-btn');
+    if (cameraBtn) {
+      cameraBtn.disabled = false;
+      cameraBtn.title = 'Toggle Camera';
+    }
+    _showAdminBanner('You can turn your camera back on');
+  }
+}
+
+/** Disable/re-enable chat input for all participants */
+function _applyDisableChat(enabled) {
+  // The host can always chat — only restrict non-host users
+  const isHost = typeof window.RecordingModule?.isHost === 'function' && window.RecordingModule.isHost();
+  if (isHost) return;
+
+  const chatInput = document.getElementById('chat-input');
+  const chatSendBtn = document.getElementById('chat-send-btn');
+  if (chatInput) {
+    chatInput.disabled = enabled;
+    chatInput.placeholder = enabled ? 'Chat is disabled in this room' : 'Type a message...';
+  }
+  if (chatSendBtn) chatSendBtn.disabled = enabled;
+
+  // Show / remove a persistent inline notice above the chat input bar
+  const chatSidebar = chatInput?.closest('.chat-sidebar');
+  const chatInputContainer = chatInput?.closest('.chat-input-container');
+  if (chatSidebar && chatInputContainer) {
+    let notice = chatSidebar.querySelector('.chat-disabled-notice');
+    if (enabled) {
+      if (!notice) {
+        notice = document.createElement('div');
+        notice.className = 'chat-disabled-notice';
+        notice.textContent = 'Chat is disabled by the host';
+        notice.style.cssText = [
+          'font-size:12px', 'color:rgba(255,255,255,0.55)', 'text-align:center',
+          'padding:6px 12px', 'background:rgba(255,255,255,0.05)',
+          'border-top:1px solid rgba(255,255,255,0.08)',
+          'margin:0 20px 0', 'border-radius:8px 8px 0 0',
+          'box-sizing:border-box'
+        ].join(';');
+        chatSidebar.insertBefore(notice, chatInputContainer);
+      }
+    } else {
+      if (notice) notice.remove();
+    }
+  }
+
+  _showAdminBanner(enabled ? 'Chat has been disabled by the host' : 'Chat has been re-enabled');
+}
+
+/** Hide/show the emoji reaction button for all participants */
+function _applyDisableEmoji(enabled) {
+  // The host can always use emoji — only restrict non-host users
+  const isHost = typeof window.RecordingModule?.isHost === 'function' && window.RecordingModule.isHost();
+  if (isHost) return;
+
+  const reactionBtn = document.getElementById('reaction-btn');
+  if (reactionBtn) reactionBtn.style.display = enabled ? 'none' : '';
+  _showAdminBanner(enabled ? 'Emoji reactions have been disabled by the host' : 'Emoji reactions have been re-enabled');
+}
+
+/**
+ * Show a short dismissible banner at the top of the screen.
+ * Auto-hides after 4 seconds.
+ */
+function _showAdminBanner(message) {
+  let banner = document.getElementById('admin-action-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'admin-action-banner';
+    banner.style.cssText = `
+      position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+      background: rgba(20,20,28,0.92); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
+      color: #fff; font-size: 13px; font-weight: 500;
+      padding: 8px 18px; z-index: 50000;
+      transition: opacity 0.3s ease; white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    `;
+    document.body.appendChild(banner);
+  }
+  banner.textContent = message;
+  banner.style.opacity = '1';
+
+  clearTimeout(banner._hideTimer);
+  banner._hideTimer = setTimeout(() => {
+    banner.style.opacity = '0';
+  }, 4000);
+}
+
+// ── End admin helpers ──────────────────────────────────────────────────────
+
 // Disconnect socket when user leaves the page
 function disconnectOnLeave() {
   if (socket && socket.connected) {
+
     // Try to notify server that user is leaving (non-blocking)
     if (currentRoomId && userId) {
       try {

@@ -56,7 +56,8 @@ function initSocketEvents(io) {
         participantCount: room.participants.size,
         users: roomUsers,
         chatHistory: chatHistory,
-        recordingActive: recStatus.active
+        recordingActive: recStatus.active,
+        adminState: room.adminState || {}
       };
 
       socket.emit('room-joined', roomJoinedData);
@@ -209,6 +210,65 @@ function initSocketEvents(io) {
         userId,
         emoji
       });
+    });
+
+    // ── Admin actions (host only) ──────────────────────────────────────────
+
+    function isRoomHost(roomId, userId) {
+      const room = roomsModule.getRoom(roomId);
+      return room && room.isActive && room.hostId === userId;
+    }
+
+    // Force-mute all participants
+    socket.on('admin-force-mute', (data) => {
+      const { roomId, userId: requesterId, enabled } = data;
+      if (!isRoomHost(roomId, requesterId)) {
+        console.warn(`[SocketEvents] admin-force-mute rejected — ${requesterId} is not host`);
+        return;
+      }
+      const room = roomsModule.getRoom(roomId);
+      if (room) room.adminState = { ...(room.adminState || {}), forceMute: !!enabled };
+      console.log(`[SocketEvents] Host ${requesterId} force-mute=${enabled} in room ${roomId}`);
+      io.to(roomId).emit('admin-force-mute', { enabled: !!enabled });
+    });
+
+    // Force-close camera for all participants
+    socket.on('admin-force-camera', (data) => {
+      const { roomId, userId: requesterId, enabled } = data;
+      if (!isRoomHost(roomId, requesterId)) {
+        console.warn(`[SocketEvents] admin-force-camera rejected — ${requesterId} is not host`);
+        return;
+      }
+      const room = roomsModule.getRoom(roomId);
+      if (room) room.adminState = { ...(room.adminState || {}), forceCamera: !!enabled };
+      console.log(`[SocketEvents] Host ${requesterId} force-camera=${enabled} in room ${roomId}`);
+      io.to(roomId).emit('admin-force-camera', { enabled: !!enabled });
+    });
+
+    // Disable / re-enable chat for all participants
+    socket.on('admin-disable-chat', (data) => {
+      const { roomId, userId: requesterId, enabled } = data;
+      if (!isRoomHost(roomId, requesterId)) {
+        console.warn(`[SocketEvents] admin-disable-chat rejected — ${requesterId} is not host`);
+        return;
+      }
+      const room = roomsModule.getRoom(roomId);
+      if (room) room.adminState = { ...(room.adminState || {}), chatDisabled: !!enabled };
+      console.log(`[SocketEvents] Host ${requesterId} disable-chat=${enabled} in room ${roomId}`);
+      io.to(roomId).emit('admin-disable-chat', { enabled: !!enabled });
+    });
+
+    // Disable / re-enable emoji reactions for all participants
+    socket.on('admin-disable-emoji', (data) => {
+      const { roomId, userId: requesterId, enabled } = data;
+      if (!isRoomHost(roomId, requesterId)) {
+        console.warn(`[SocketEvents] admin-disable-emoji rejected — ${requesterId} is not host`);
+        return;
+      }
+      const room = roomsModule.getRoom(roomId);
+      if (room) room.adminState = { ...(room.adminState || {}), emojiDisabled: !!enabled };
+      console.log(`[SocketEvents] Host ${requesterId} disable-emoji=${enabled} in room ${roomId}`);
+      io.to(roomId).emit('admin-disable-emoji', { enabled: !!enabled });
     });
   });
 

@@ -12,7 +12,7 @@ const roomsModule = require('./rooms');
  * Create a new room
  */
 router.post('/rooms/create', (req, res) => {
-  const { roomId, meetingName, hostId: clientHostId } = req.body;
+  const { roomId, meetingName, hostId: clientHostId, password, disableChat, disableEmoji } = req.body;
 
   if (!roomId) {
     return res.status(400).json({ error: 'Room ID is required' });
@@ -23,17 +23,27 @@ router.post('/rooms/create', (req, res) => {
     return res.status(409).json({ error: 'Room already exists' });
   }
 
-  // Use the client's own userId as hostId so isHost() correctly identifies them.
-  // Fall back to a server-generated id only if the client didn't send one.
   const hostId = clientHostId || `host_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const room = roomsModule.createRoom(roomId, meetingName, hostId);
+  // Only store the password if the host actually set one
+  const roomPassword = password && password.trim() ? password.trim() : null;
+
+  // Seed adminState from host pre-room settings
+  const initialAdminState = {
+    chatDisabled:  !!disableChat,
+    emojiDisabled: !!disableEmoji
+  };
+
+  const room = roomsModule.createRoom(roomId, meetingName, hostId, roomPassword, initialAdminState);
+
+  console.log(`[API] Room "${roomId}" created by host ${hostId} — chatDisabled=${initialAdminState.chatDisabled}, emojiDisabled=${initialAdminState.emojiDisabled}`);
 
   res.json({
     success: true,
     room: {
       id: room.id,
       name: room.name,
-      hostId: room.hostId
+      hostId: room.hostId,
+      hasPassword: !!room.password
     }
   });
 });
@@ -43,7 +53,7 @@ router.post('/rooms/create', (req, res) => {
  * Join an existing room
  */
 router.post('/rooms/join', (req, res) => {
-  const { roomId } = req.body;
+  const { roomId, password } = req.body;
 
   if (!roomId) {
     return res.status(400).json({ error: 'Room ID is required' });
@@ -53,6 +63,13 @@ router.post('/rooms/join', (req, res) => {
 
   if (!room || !room.isActive) {
     return res.status(404).json({ error: 'Room not found or inactive' });
+  }
+
+  // Password check
+  if (room.password) {
+    if (!password || password.trim() !== room.password) {
+      return res.status(401).json({ error: 'Incorrect password', requiresPassword: true });
+    }
   }
 
   res.json({
@@ -82,6 +99,7 @@ router.get('/rooms/:roomId', (req, res) => {
       id: room.id,
       name: room.name,
       hostId: room.hostId,
+      hasPassword: !!room.password,
       participantCount: room.participants.size
     }
   });
