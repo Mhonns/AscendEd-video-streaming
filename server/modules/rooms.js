@@ -4,8 +4,8 @@
  */
 
 const chatModule = require('./chat');
-const sfuModule = require('./sfu');
-const recorder = require('./recorder');
+const sfuModule = require('../sfu/sfu');
+const recorder = require('../recorder');
 const rooms = new Map();
 const users = new Map(); // Store user profiles: userId -> { name, profileImage }
 const userMediaState = new Map(); // Store media state: userId -> { audioOn, videoOn, screenOn }

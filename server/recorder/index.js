@@ -24,7 +24,7 @@ const webrtc = require('wrtc');
 const { RTCVideoSink, RTCAudioSink } = webrtc.nonstandard;
 
 // Import SFU internals
-const sfuModule = require('../sfu');
+const sfuModule = require('../sfu/sfu');
 
 // Output directory (auto-created if missing)
 const RECORDINGS_DIR = path.join(__dirname, 'recordings');

@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AscendEd Video Conference</title>
-  <link rel="stylesheet" href="css/landing.css">
+  <link rel="stylesheet" href="../css/pages/landing.css">
 </head>
 
 <body>
@@ -16,7 +16,7 @@
       <div class="profile-section">
         <div class="profile-container">
           <div class="profile-image-wrapper">
-            <img id="profile-image" src="assets/icons/people.svg" alt="Profile" class="profile-image">
+            <img id="profile-image" src="../assets/icons/people.svg" alt="Profile" class="profile-image">
             <input type="file" id="profile-upload" accept="image/*" style="display: none;"
               onchange="handleProfileUpload(event)">
             <button class="profile-upload-btn" onclick="document.getElementById('profile-upload').click()"
@@ -67,7 +67,7 @@
         </svg>
       </button>
       <div class="qr-code-container">
-        <img src="assets/images/QR-prompt-pay.jpg" alt="Payment QR Code" class="qr-code-image">
+        <img src="../assets/images/QR-prompt-pay.jpg" alt="Payment QR Code" class="qr-code-image">
       </div>
     </div>
   </div>
@@ -230,8 +230,8 @@
     </div>
   </div>
 
-  <script src="js/config.js"></script>
-  <script src="js/landing.js"></script>
+  <script src="../js/core/config.js"></script>
+  <script src="../js/pages/landing.js"></script>
 </body>
 
 </html>

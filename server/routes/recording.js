@@ -18,10 +18,10 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 
-const RECORDINGS_DIR = path.join(__dirname, 'recordings');
+const RECORDINGS_DIR = path.join(__dirname, '../recorder/recordings');
 
-const roomsModule = require('../rooms');
-const recorder = require('.');
+const roomsModule = require('../modules/rooms');
+const recorder = require('../recorder');
 
 // io instance is injected by main.js after Socket.io is initialised
 let _io = null;
@@ -49,7 +49,7 @@ router.post('/start', async (req, res) => {
     // Use the host as the priority user (video/screen recorded from host only)
     const priorityUserId = room.hostId || requesterId;
 
-    const { iceServers } = require('../sfu');
+    const { iceServers } = require('../sfu/sfu');
     const result = await recorder.startRecording(roomId, priorityUserId, iceServers, room.name);
 
     if (!result.ok) {

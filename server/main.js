@@ -12,10 +12,10 @@ const path = require('path');
 const PORT = process.env.PORT || 8443;
 
 // Import modules
-const apiRoutes = require('./api');
-const recordingRoutes = require('./recorder/recording');
-const { initSocketEvents } = require('./socket-events');
-const { setIo: setSfuIo } = require('./sfu');
+const apiRoutes = require('./routes/api');
+const recordingRoutes = require('./routes/recording');
+const { initSocketEvents } = require('./socket/socket-events');
+const { setIo: setSfuIo } = require('./sfu/sfu');
 const { setIo: setRecordingIo } = recordingRoutes;
 
 const app = express();
@@ -64,7 +64,14 @@ const io = new Server(server, {
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve frontend static files
 app.use(express.static(path.join(__dirname, '../frontend')));
+
+// Root redirect: / → /pages/index.html
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/pages/index.html'));
+});
 
 // Mount API routes
 app.use('/api', apiRoutes);

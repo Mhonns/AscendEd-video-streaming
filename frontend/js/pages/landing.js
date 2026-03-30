@@ -64,7 +64,7 @@ async function startMeeting() {
     const data = await response.json();
 
     if (response.ok && data.success) {
-      window.location.href = `pages/room.html?room=${roomId}&name=${encodeURIComponent(meetingName)}`;
+      window.location.href = `room.html?room=${roomId}&name=${encodeURIComponent(meetingName)}`;
     } else {
       alert(`Error creating room: ${data.error || 'Unknown error'}`);
     }
@@ -101,7 +101,7 @@ async function joinMeeting(passwordOverride) {
     const data = await response.json();
 
     if (response.ok && data.success) {
-      window.location.href = `pages/room.html?room=${roomCode}&name=${encodeURIComponent(data.room.name)}`;
+      window.location.href = `room.html?room=${roomCode}&name=${encodeURIComponent(data.room.name)}`;
     } else if (response.status === 401 && data.requiresPassword) {
       // Room requires a password — prompt the user
       const entered = window.prompt(`Room "${roomCode}" is password-protected. Enter the password:`);
@@ -295,7 +295,7 @@ async function saveUserProfile(options = {}) {
 
   // Save to localStorage
   localStorage.setItem('userName', userName);
-  if (profileImage && profileImage !== 'assets/icons/people.svg') {
+  if (profileImage && profileImage !== '../assets/icons/people.svg') {
     localStorage.setItem('profileImage', profileImage);
   }
 

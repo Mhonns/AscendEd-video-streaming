@@ -3,10 +3,10 @@
  * Handles real-time communication events
  */
 
-const roomsModule = require('./rooms');
-const chatModule = require('./chat');
-const sfuModule = require('./sfu');
-const recorder = require('./recorder');
+const roomsModule = require('../modules/rooms');
+const chatModule = require('../modules/chat');
+const sfuModule = require('../sfu/sfu');
+const recorder = require('../recorder');
 
 // Track socket connections
 const socketConnections = new Map();
