@@ -1,0 +1,11 @@
+--- server/recorder/index.js
++++ server/recorder/index.js
+@@ -252,7 +252,7 @@
+             // or if it's a raw black frame, we just skip it to prevent flickering until the scaler dies natively.
+         }
+ 
+-        if (this[scalerWKey] !== width || this[scalerHKey] !== height) {
++        if (!this[scalerKey] || this[scalerWKey] !== width || this[scalerHKey] !== height) {
+             if (this[scalerKey]) {
+                 this[scalerKey].kill('SIGKILL');
+             }
