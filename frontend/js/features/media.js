@@ -2,27 +2,6 @@ const serverUrl = `streaming.nathadon.com`;
 const serverPort = 5000;
 const serverProtocol = 'https';
 
-// const DEFAULT_ICE_SERVERS = [
-//   { urls: 'stun:stun.l.google.com:19302' },
-//   { urls: 'stun:stun1.l.google.com:19302' },
-//   { urls: 'stun:stun2.l.google.com:19302' },
-//   {
-//     urls: 'turn:openrelay.metered.ca:80',
-//     username: 'openrelayproject',
-//     credential: 'openrelayproject'
-//   },
-//   {
-//     urls: 'turn:openrelay.metered.ca:443',
-//     username: 'openrelayproject',
-//     credential: 'openrelayproject'
-//   },
-//   {
-//     urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-//     username: 'openrelayproject',
-//     credential: 'openrelayproject'
-//   }
-// ];
-
 const DEFAULT_ICE_SERVERS = [
   // STUN - free Google servers are fine to keep
   { urls: 'stun:stun.l.google.com:19302' },
@@ -407,86 +386,24 @@ async function requestStopScreenShare(targetUserId) {
 }
 
 function showScreenSharePreview(stream) {
-  const videoGrid = document.getElementById('video-grid');
-  const placeholder = document.getElementById('video-placeholder');
-  if (!videoGrid) return;
-
-  if (placeholder) {
-    placeholder.classList.add('hidden');
-  }
-
-  let container = document.getElementById('main-video-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'main-video-container';
-    container.className = 'video-item local screenshare';
-    const uid = localStorage.getItem('userId');
-    if (uid) container.dataset.userId = uid;
-
-    const videoEl = document.createElement('video');
-    videoEl.id = 'main-video';
-    videoEl.autoplay = true;
-    videoEl.muted = true;
-    videoEl.playsInline = true;
-
-    const label = document.createElement('div');
-    label.className = 'video-label';
-    label.textContent = 'You (Screen)';
-
-    container.appendChild(videoEl);
-    container.appendChild(label);
-    videoGrid.appendChild(container);
-  }
-
-  const videoEl = document.getElementById('main-video');
-  if (videoEl) {
-    videoEl.srcObject = stream;
-    videoEl.play?.().catch?.(() => { });
-  }
-
-  updateVideoGridLayout();
+  window.SFUConsumeModule?.registerLocalScreenShare?.(stream);
   window.UsersModule?.reorderUserItemsAndVideos?.();
 }
 
 function hideScreenSharePreview() {
-  const container = document.getElementById('main-video-container');
+  window.SFUConsumeModule?.unregisterLocalScreenShare?.();
+  
+  // If no shares are left, make sure the placeholder logic runs
   const videoGrid = document.getElementById('video-grid');
   const placeholder = document.getElementById('video-placeholder');
-
-  if (container) {
-    // Only clear the main-video (local screen share), leave remote-video if present
-    const mainVideoEl = document.getElementById('main-video');
-    if (mainVideoEl) {
-      try {
-        mainVideoEl.pause();
-        mainVideoEl.srcObject = null;
-      } catch (_) { }
-      mainVideoEl.remove();
-    }
-    // Update label
-    const label = container.querySelector('.video-label');
-    if (label) label.textContent = 'Remote';
-    // Remove screenshare class, keep remote if remote video exists
-    container.classList.remove('local', 'screenshare');
-    const remoteVideo = document.getElementById('remote-video');
-    if (remoteVideo) {
-      container.classList.add('remote');
-    } else {
-      // No remote video either, remove the whole container
-      container.remove();
-    }
-  }
-
-  updateVideoGridLayout();
-  window.UsersModule?.reorderUserItemsAndVideos?.();
-
-  // If there are no other video tiles left, show placeholder
   if (videoGrid && placeholder) {
     const remaining = videoGrid.querySelectorAll('.video-item');
     if (remaining.length === 0) {
       placeholder.classList.remove('hidden');
     }
   }
+  
+  window.UsersModule?.reorderUserItemsAndVideos?.();
 }
 
 /**

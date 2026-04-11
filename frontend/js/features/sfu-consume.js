@@ -174,14 +174,19 @@ async function requestConsumeCurrentStreams(roomId, userId) {
       });
     });
 
-    // Reconcile activeScreenShares — remove users no longer sharing,
-    // but keep valid entries so switching still works mid-session.
+    const myUserId = localStorage.getItem('userId') || 'local-user';
     const expectedScreenUserIds = new Set(
       answerPayload.streamMetadata
         .filter(m => m.streamType === 'screen')
         .map(m => m.oderId)
     );
+    // Don't prune our own local share if we have one active
+    if (window.MediaModule?.isScreenSharing?.()) {
+      expectedScreenUserIds.add(myUserId);
+    }
+
     for (let i = activeScreenShares.length - 1; i >= 0; i--) {
+      // Only prune if it's not in the expected set AND it's not our local share
       if (!expectedScreenUserIds.has(activeScreenShares[i].oderId)) {
         const removed = activeScreenShares.splice(i, 1)[0];
         window.UsersModule?.setScreenShareOn?.(removed.oderId, false);
@@ -297,14 +302,47 @@ function displayRemoteScreenShare(stream, oderId) {
     activeScreenShares[existing].stream = stream;
   } else {
     activeScreenShares.push({ oderId, stream });
-    // Auto-jump to the newly arrived share (highest-priority = latest)
+    // Auto-jump to the newly arrived share
     currentScreenShareIndex = activeScreenShares.length - 1;
   }
 
   renderScreenShare();
   // Update user list badge
   window.UsersModule?.setScreenShareOn?.(oderId, true);
-  console.log(`[SFUConsumeModule] Registered screen share from ${oderId} (total: ${activeScreenShares.length})`);
+  console.log(`[SFUConsumeModule] Registered remote screen share from ${oderId} (total: ${activeScreenShares.length})`);
+}
+
+/**
+ * Register local screen share in the navigator registry.
+ */
+function registerLocalScreenShare(stream) {
+  const myUserId = localStorage.getItem('userId') || 'local-user';
+  
+  const existing = activeScreenShares.findIndex(s => s.oderId === myUserId);
+  if (existing !== -1) {
+    activeScreenShares[existing].stream = stream;
+  } else {
+    activeScreenShares.push({ oderId: myUserId, stream });
+    // Don't auto-jump here, usually media.js just started it
+    currentScreenShareIndex = activeScreenShares.length - 1;
+  }
+  
+  renderScreenShare();
+  console.log(`[SFUConsumeModule] Registered local screen share (total: ${activeScreenShares.length})`);
+}
+
+/**
+ * Remove local screen share from the navigator registry.
+ */
+function unregisterLocalScreenShare() {
+  const myUserId = localStorage.getItem('userId') || 'local-user';
+  const idx = activeScreenShares.findIndex(s => s.oderId === myUserId);
+  if (idx !== -1) {
+    activeScreenShares.splice(idx, 1);
+    currentScreenShareIndex = Math.max(0, Math.min(currentScreenShareIndex, activeScreenShares.length - 1));
+  }
+  renderScreenShare();
+  console.log(`[SFUConsumeModule] Unregistered local screen share (total: ${activeScreenShares.length})`);
 }
 
 /**
@@ -319,7 +357,7 @@ function renderScreenShare() {
   if (activeScreenShares.length === 0) {
     // No shares left — tear down the container
     const container = document.getElementById('main-video-container');
-    if (container && !container.classList.contains('screenshare')) {
+    if (container) {
       container.remove();
     }
     if (placeholder) placeholder.classList.remove('hidden');
@@ -331,6 +369,8 @@ function renderScreenShare() {
   // Clamp index
   currentScreenShareIndex = Math.max(0, Math.min(currentScreenShareIndex, activeScreenShares.length - 1));
   const { oderId, stream } = activeScreenShares[currentScreenShareIndex];
+  const myUserId = localStorage.getItem('userId') || 'local-user';
+  const isLocal = (oderId === myUserId);
 
   if (placeholder) placeholder.classList.add('hidden');
 
@@ -339,30 +379,63 @@ function renderScreenShare() {
   if (!container) {
     container = document.createElement('div');
     container.id = 'main-video-container';
-    container.className = 'video-item remote screen';
-    const label = document.createElement('div');
-    label.className = 'video-label';
-    container.appendChild(label);
+    container.className = 'video-item screen';
     videoGrid.appendChild(container);
   }
-  container.classList.add('remote', 'screen');
+  
+  // Set appropriate classes
+  container.className = `video-item screen ${isLocal ? 'local screenshare' : 'remote'}`;
   container.dataset.oderId = oderId;
 
-  // Update label
-  const label = container.querySelector('.video-label');
-  if (label) label.textContent = getBroadcasterName(oderId) + ' (Screen)';
-
-  // Create or get video element
-  let videoEl = document.getElementById('remote-video');
-  if (!videoEl) {
-    videoEl = document.createElement('video');
-    videoEl.id = 'remote-video';
-    videoEl.autoplay = true;
-    videoEl.playsInline = true;
-    container.insertBefore(videoEl, container.querySelector('.video-label'));
+  // Get or create video-area wrapper
+  let videoArea = container.querySelector('.screen-video-area');
+  if (!videoArea) {
+    videoArea = document.createElement('div');
+    videoArea.className = 'screen-video-area';
+    container.insertBefore(videoArea, container.firstChild);
   }
-  videoEl.srcObject = stream;
 
+  // Update label
+  let label = videoArea.querySelector('.video-label');
+  if (!label) {
+    label = document.createElement('div');
+    label.className = 'video-label';
+    videoArea.appendChild(label);
+  }
+  label.textContent = isLocal ? 'You (Screen)' : (getBroadcasterName(oderId) + ' (Screen)');
+
+  // Logic: if it's local share, use #main-video. If remote, use #remote-video.
+  // Hide the one that's not active.
+  let mainVideo = document.getElementById('main-video');
+  let remoteVideo = document.getElementById('remote-video');
+
+  if (isLocal) {
+    if (!mainVideo) {
+      mainVideo = document.createElement('video');
+      mainVideo.id = 'main-video';
+      mainVideo.autoplay = true;
+      mainVideo.muted = true;
+      mainVideo.playsInline = true;
+      videoArea.insertBefore(mainVideo, label);
+    }
+    mainVideo.style.display = 'block';
+    mainVideo.srcObject = stream;
+    if (remoteVideo) remoteVideo.style.display = 'none';
+  } else {
+    if (!remoteVideo) {
+      remoteVideo = document.createElement('video');
+      remoteVideo.id = 'remote-video';
+      remoteVideo.autoplay = true;
+      remoteVideo.playsInline = true;
+      videoArea.insertBefore(remoteVideo, label);
+    }
+    remoteVideo.style.display = 'block';
+    remoteVideo.srcObject = stream;
+    if (mainVideo) mainVideo.style.display = 'none';
+  }
+
+  // Refresh navigation UI
+  updateScreenNavUI();
   updateVideoGridLayout();
 }
 
@@ -375,7 +448,7 @@ function navigateScreenShare(direction) {
     currentScreenShareIndex + direction,
     activeScreenShares.length - 1
   ));
-  renderScreenShare();
+  renderScreenShare(); // renderScreenShare already calls updateScreenNavUI
 }
 
 /**
@@ -387,6 +460,33 @@ function jumpToScreenShare(oderId) {
     currentScreenShareIndex = idx;
     renderScreenShare();
   }
+}
+
+/**
+ * Update the static #screen-share-nav strip (lives in .room-wrapper between
+ * video-container and bottom-controls). Only visible when any share is active.
+ */
+function updateScreenNavUI() {
+  const nav = document.getElementById('screen-share-nav');
+  if (!nav) return;
+
+  const total = activeScreenShares.length;
+  const current = currentScreenShareIndex + 1;
+
+  console.log(`[SFUConsumeModule] updateScreenNavUI: current=${current} total=${total}`);
+
+  // Show strip whenever any share is active; hide when none
+  nav.style.display = total >= 1 ? 'flex' : 'none';
+
+  // Update counter text
+  const counter = document.getElementById('screen-nav-counter');
+  if (counter) counter.textContent = `${current} / ${total}`;
+
+  // Disable buttons at boundaries
+  const prevBtn = document.getElementById('screen-nav-prev');
+  const nextBtn = document.getElementById('screen-nav-next');
+  if (prevBtn) prevBtn.disabled = (current <= 1);
+  if (nextBtn) nextBtn.disabled = (current >= total);
 }
 
 /**
@@ -667,6 +767,8 @@ window.SFUConsumeModule = {
   // Screen share in main grid
   displayRemoteScreenShare,
   removeRemoteScreenShare,
+  registerLocalScreenShare,
+  unregisterLocalScreenShare,
   navigateScreenShare,
   jumpToScreenShare,
 

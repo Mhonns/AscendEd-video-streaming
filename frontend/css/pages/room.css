@@ -257,6 +257,13 @@ body.show-cursor {
   width: 100%;
 }
 
+/* Video + label wrapper — positioning context for absolutely placed video/label */
+.screen-video-area {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
 .video-placeholder {
   position: absolute;
   top: 0;
@@ -364,6 +371,66 @@ body.show-cursor {
 
 .video-item.local .video-label {
   background: rgba(99, 179, 237, 0.7);
+}
+
+/* ── Screen-share navigator: < 1 / 2 > ── */
+/* Flex child of .room-wrapper, sits between .video-container and .bottom-controls.
+   Shown/hidden via JS; only appears when 2+ screen shares are active. */
+.screen-share-nav {
+  display: none;
+  /* switched to flex by JS when total > 1 */
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  width: 100%;
+  background: transparent;
+  pointer-events: auto;
+  z-index: 100;
+}
+
+.screen-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.15s ease, opacity 0.18s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.screen-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(1.1);
+}
+
+.screen-nav-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.screen-nav-btn:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.screen-nav-counter {
+  min-width: 44px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  user-select: none;
 }
 
 .user-card {
@@ -949,7 +1016,8 @@ body.show-cursor {
   border-radius: 12px;
   background: #000;
   object-fit: cover;
-  transform: scaleX(-1); /* mirror like a real preview */
+  transform: scaleX(-1);
+  /* mirror like a real preview */
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 

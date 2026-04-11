@@ -4,7 +4,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video Conference Room</title>
+  <title>AscendEd — Video Conference Room</title>
+  <meta name="description" content="You've been invited to an AscendEd video conference room. Join the meeting to collaborate in real time.">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Join the Meeting — AscendEd">
+  <meta property="og:description" content="You've been invited to an AscendEd video conference room. Click the link to join and collaborate in real time.">
+  <meta property="og:site_name" content="AscendEd">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Join the Meeting — AscendEd">
+  <meta name="twitter:description" content="You've been invited to an AscendEd video conference room. Click the link to join and collaborate in real time.">
+
   <link rel="stylesheet" href="../css/pages/room.css">
   <link rel="stylesheet" href="../css/components/buttons.css">
   <link rel="stylesheet" href="../css/components/people.css">
@@ -60,6 +73,15 @@
 
     </div>
 
+    <!-- Screen Share Navigator (shown between video and bottom controls when 2+ shares active) -->
+    <div class="screen-share-nav" id="screen-share-nav">
+      <button id="screen-nav-prev" class="screen-nav-btn" aria-label="Previous screen share"
+        onclick="window.SFUConsumeModule?.navigateScreenShare(-1)">&#8249;</button>
+      <div id="screen-nav-counter" class="screen-nav-counter">1 / 1</div>
+      <button id="screen-nav-next" class="screen-nav-btn" aria-label="Next screen share"
+        onclick="window.SFUConsumeModule?.navigateScreenShare(1)">&#8250;</button>
+    </div>
+
     <!-- Bottom Controls -->
     <div class="bottom-controls" id="bottom-controls">
       <button class="control-btn off" id="mic-btn" title="Microphone">
@@ -108,30 +130,27 @@
   </div>
 
   <!-- Emoji Picker Popup -->
+  <!-- Emojis are stored in a <template> (never rendered/scraped) and injected by JS -->
+  <template id="emoji-list-template">
+    😀,😂,😍,🥳,😎,🤩,😢,😮,🤔,👍,👎,👏,🙌,🔥,❤️,💯,✨,🎉,💪,🤷
+  </template>
   <div class="emoji-picker" id="emoji-picker">
-    <div class="emoji-picker-content">
-      <span class="emoji-item" data-emoji="😀">😀</span>
-      <span class="emoji-item" data-emoji="😂">😂</span>
-      <span class="emoji-item" data-emoji="😍">😍</span>
-      <span class="emoji-item" data-emoji="🥳">🥳</span>
-      <span class="emoji-item" data-emoji="😎">😎</span>
-      <span class="emoji-item" data-emoji="🤩">🤩</span>
-      <span class="emoji-item" data-emoji="😢">😢</span>
-      <span class="emoji-item" data-emoji="😮">😮</span>
-      <span class="emoji-item" data-emoji="🤔">🤔</span>
-      <span class="emoji-item" data-emoji="👍">👍</span>
-      <span class="emoji-item" data-emoji="👎">👎</span>
-      <span class="emoji-item" data-emoji="👏">👏</span>
-      <span class="emoji-item" data-emoji="🙌">🙌</span>
-      <span class="emoji-item" data-emoji="🔥">🔥</span>
-      <span class="emoji-item" data-emoji="❤️">❤️</span>
-      <span class="emoji-item" data-emoji="💯">💯</span>
-      <span class="emoji-item" data-emoji="✨">✨</span>
-      <span class="emoji-item" data-emoji="🎉">🎉</span>
-      <span class="emoji-item" data-emoji="💪">💪</span>
-      <span class="emoji-item" data-emoji="🤷">🤷</span>
-    </div>
+    <div class="emoji-picker-content" id="emoji-picker-content"></div>
   </div>
+  <script>
+    (function () {
+      const tpl = document.getElementById('emoji-list-template');
+      const container = document.getElementById('emoji-picker-content');
+      const emojis = tpl.innerHTML.trim().split(',').map(e => e.trim()).filter(Boolean);
+      emojis.forEach(function (emoji) {
+        const span = document.createElement('span');
+        span.className = 'emoji-item';
+        span.dataset.emoji = emoji;
+        span.textContent = emoji;
+        container.appendChild(span);
+      });
+    })();
+  </script>
 
   <!-- Emoji Reactions Container (for floating emojis) -->
   <div class="emoji-reactions-container" id="emoji-reactions-container"></div>

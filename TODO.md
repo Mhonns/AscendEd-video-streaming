@@ -1,4 +1,5 @@
 ## Feature
+# Switch Between Screen
 # Owner ban kick mute and mute all ***
 # Setting eg. noise cancel, background blur, disable emoji, default mute ***
 
@@ -22,3 +23,4 @@
 
 ## CI/CD
 # Add the github action for obsfucated the frontend js files and deploy to the server
+# Obfuscated code before deploying too
